@@ -1,6 +1,5 @@
 import utils
 
-# model = utils.LeNet()
 model = utils.AlexNet()
 
 # param_size = 0
@@ -16,10 +15,9 @@ model = utils.AlexNet()
 from pthflops import count_ops
 import torch
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# inputTensor = torch.rand(3,32,32).to(device) # LeNet
-inputTensor = torch.rand(1,3,224,224).to(device) # AlexNet
+inputTensor = torch.rand(1, 3, 224, 224).to(device) # AlexNet
 
 model.to(device)
 

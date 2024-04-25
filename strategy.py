@@ -23,7 +23,7 @@ from constants import *
 from dataset_utils import cifar10Transformation
 
 
-class MAB_ClientManager(SimpleClientManager):
+class PPO_ClientManager(SimpleClientManager): # TODO
     def sample(self, num_clients: int, server_round=0, time_constr=0):
         # For model initialization
         if num_clients == 1:
@@ -409,7 +409,7 @@ class Random_ClientManager(SimpleClientManager):
             param_dicts
 
 
-class BSFL(Strategy):
+class SFL(Strategy):
     # pylint: disable=too-many-arguments,too-many-instance-attributes,line-too-long
     def __init__(
             self,
@@ -466,7 +466,7 @@ class BSFL(Strategy):
 
     def configure_fit(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[MAB_ClientManager, Random_ClientManager]
+            client_manager: Union[PPO_ClientManager, Random_ClientManager]
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
@@ -549,7 +549,7 @@ class BSFL(Strategy):
 
     def configure_evaluate(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[MAB_ClientManager, Random_ClientManager]
+            client_manager: Union[PPO_ClientManager, Random_ClientManager]
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
         """Configure the next round of evaluation."""
         # Parameters and config

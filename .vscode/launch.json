@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "MAB",
+            "name": "PPO",
             "type": "debugpy",
             "request": "launch",
             "cwd": "${workspaceFolder}",
@@ -10,7 +10,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--mode",
-                "MAB"
+                "PPO"
             ],
             "justMyCode": false
         },

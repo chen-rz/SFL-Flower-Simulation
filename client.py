@@ -9,7 +9,6 @@ import torch
 from torch.utils.data import DataLoader
 import torchvision
 from flwr.common import Scalar
-import random
 
 from dataset_utils import get_dataloader
 from utils import *
@@ -24,20 +23,17 @@ class FlowerClient(fl.client.NumPyClient):
         self.properties: Dict[str, Scalar] = {"tensor_type": "numpy.ndarray"}
 
         # Instantiate model
-        self.net = LeNet()
-        # self.net = AlexNet()
+        self.net = AlexNet()
 
         # Determine device
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Random initialized parameters
-        # self.properties["cyclePerBit"] = param_dict["cyclePerBit"]
+        # Randomly initialized parameters
         self.properties["dataSize"] = param_dict["dataSize"]
-        # *** computation is actually flops! ***
-        self.properties["computation"] = param_dict["computation"] #* random.uniform(0.5, 2.0) # Random variation on computational capability
-
+        self.properties["computation"] = param_dict["computation"]
         self.properties["transPower"] = param_dict["transPower"]
 
+        # TODO
         self.properties["updateTime"] = \
             fit_config(0)["epochs"] * sys_modelFlops * self.properties["dataSize"] \
                 / self.properties["computation"]
@@ -115,7 +111,6 @@ class FlowerClient(fl.client.NumPyClient):
 
 def fit_config(server_round: int) -> Dict[str, Scalar]:
     """Return a configuration with static batch size and (local) epochs."""
-    _ = server_round  # placeholder
     config = {
         "epochs": 5,  # number of local epochs
         "batch_size": 64,
@@ -144,15 +139,9 @@ def get_evaluate_fn(test_set: torchvision.datasets.CIFAR10, ):
     ):
         """Use the entire CIFAR-10 test set for evaluation."""
 
-        # placeholder
-        _ = server_round
-        __ = config
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # determine device
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        model = LeNet()
-        # model = AlexNet()
+        model = AlexNet()
 
         set_params(model, parameters)
         model.to(device)
