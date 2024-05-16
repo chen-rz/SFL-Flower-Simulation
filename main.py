@@ -10,7 +10,7 @@ from strategy import *
 parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
 parser.add_argument("--num_client_cpus", type=int, default=6)
 parser.add_argument("--num_client_gpus", type=int, default=1)
-parser.add_argument("--mode", type=str, default="PPO")
+parser.add_argument("--mode", type=str, default="C2MAB")
 
 # Start simulation (a _default server_ will be created)
 if __name__ == "__main__":
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     )
 
     # Configure the client manager
-    if args.mode == "PPO":
-        client_manager = PPO_ClientManager()
+    if args.mode == "C2MAB":
+        client_manager = C2MAB_ClientManager()
     elif args.mode == "Random":
         client_manager = Random_ClientManager()
     else:

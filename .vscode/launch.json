@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "PPO",
+            "name": "C2MAB",
             "type": "debugpy",
             "request": "launch",
             "cwd": "${workspaceFolder}",
@@ -10,7 +10,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--mode",
-                "PPO"
+                "C2MAB"
             ],
             "justMyCode": false
         },

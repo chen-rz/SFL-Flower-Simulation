@@ -33,11 +33,6 @@ class FlowerClient(fl.client.NumPyClient):
         self.properties["computation"] = param_dict["computation"]
         self.properties["transPower"] = param_dict["transPower"]
 
-        # TODO
-        self.properties["updateTime"] = \
-            fit_config(0)["epochs"] * sys_modelFlops * self.properties["dataSize"] \
-                / self.properties["computation"]
-
     def get_properties(self, config) -> Dict[str, Scalar]:
         return self.properties
 
@@ -63,7 +58,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.net.to(self.device)
 
         # Train
-        train_loss = train(
+        train_loss, mean_square_batch_loss = train(
             self.net, trainloader, epochs=config["epochs"], device=self.device
         )
 
@@ -73,6 +68,12 @@ class FlowerClient(fl.client.NumPyClient):
                 mode='a'
         ) as outputFile:
             outputFile.write(str(train_loss) + "\n")
+        
+        with open(
+                "./output/mean_square_batch_loss/client_{}.txt".format(self.cid),
+                mode='a'
+        ) as outputFile:
+            outputFile.write(str(mean_square_batch_loss) + "\n")
 
         # Return local model and statistics
         return get_params(self.net), len(trainloader.dataset), {}
