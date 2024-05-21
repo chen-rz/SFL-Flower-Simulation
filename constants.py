@@ -21,3 +21,6 @@ sys_bgNoise = 1e-13
 
 # Total bandwidth
 sys_bandwidth = 1e6
+
+# Alpha for Generalization
+alpha = 0.5

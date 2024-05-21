@@ -28,7 +28,7 @@ class C2MAB_ClientManager(SimpleClientManager): # TODO
         # For model initialization
         if num_clients == 1:
             # return [self.clients[str(random.randint(0, pool_size - 1))]]
-            return [self.clients[str(0)]]
+            return [self.clients[str(0)]] # Designating client "0", this is for precisely retrieving its initial loss
 
         # For evaluation, use the same devices as in the fit round
         elif num_clients == -1:
@@ -41,208 +41,82 @@ class C2MAB_ClientManager(SimpleClientManager): # TODO
 
         # Sample clients which meet the criterion
         param_dicts = []
-        available_cids = []
+        sorted_cids = [] # For Stage 1
+        available_cids = [] # For Stage 2 (Final)
 
-        C_record = []
-        updateTimeList = []
+        ###### STAGE 1 - Evaluation of Generalization ######################################################
 
         # Get info of previous round
-        if server_round == 1:
-            init_parameters = self.clients["0"].get_parameters(
-                ins=GetParametersIns(config={}),
-                timeout=None
-            ).parameters
-            init_param_ndarrays = parameters_to_ndarrays(init_parameters)
-            init_eval_func = clt.get_evaluate_fn(
-                torchvision.datasets.CIFAR10(
-                    root="./data", train=False, transform=cifar10Transformation()
-                )
-            )
-            eval_res = init_eval_func(0, init_param_ndarrays, {})
-            L_prev = eval_res[0]
+        # if server_round == 1:
+        #     init_parameters = self.clients["0"].get_parameters(
+        #         ins=GetParametersIns(config={}),
+        #         timeout=None
+        #     ).parameters
+        #     init_param_ndarrays = parameters_to_ndarrays(init_parameters)
+        #     init_eval_func = clt.get_evaluate_fn(
+        #         torchvision.datasets.CIFAR10(
+        #             root="./data", train=False, transform=cifar10Transformation()
+        #         )
+        #     )
+        #     eval_res = init_eval_func(0, init_param_ndarrays, {})
+        #     initial_loss = eval_res[0]
 
-        else:
-            with open("./output/fit_server/round_{}.txt".format(server_round - 1)) as inputFile:
-                cids_in_prev_round = eval(inputFile.readline())["clients_selected"]
+        L_it = [1 for _ in range(pool_size)] # The mean square batch loss of each client
+        G_it = [0 for _ in range(pool_size)] # The generalization evaluation of each client
 
-            valid_loss_sum, valid_n_num = 0.0, 0
-            loss_of_prev_round = []
-
-            for n in range(pool_size):
-                with open("./output/val_loss/client_{}.txt".format(n)) as inputFile:
-                    loss_of_prev_round.append(eval(inputFile.readlines()[-1]))
-                if n in cids_in_prev_round:
-                    assert loss_of_prev_round[-1] > 0
-                    valid_loss_sum += loss_of_prev_round[-1]
-                    valid_n_num += 1
-                else:
-                    assert loss_of_prev_round[-1] == -1
-
-            L_prev = valid_loss_sum / valid_n_num
-
-        with open(
-                "./output/loss_avg/L_{}.txt".format(server_round - 1), mode='w'
-        ) as outputFile:
-            outputFile.write(str(L_prev))
-
+        # Get each client's parameters
         for n in range(pool_size):
-            # Get each client's parameters
             param_dicts.append(
                 self.clients[str(n)].get_properties(
                     flwr.common.GetPropertiesIns(config={}), 68400
                 ).properties.copy()
             )
-
             param_dicts[n]["isSelected"] = False
-            updateTimeList.append(param_dicts[n]["updateTime"])
 
-        C_min = min(updateTimeList)
-        C_max = max(updateTimeList)
-        for n in range(pool_size):
-            param_dicts[n]["C"] = (param_dicts[n]["updateTime"] - C_min) / (C_max - C_min)
-            C_record.append(param_dicts[n]["C"])
-        
-        with open("./output/C_records/round_{}.txt".format(server_round), mode='w') as outputFile:
-            outputFile.write(str(C_record))
-        
-        # log(DEBUG, "Wrote C_record: " + str(C_record))
+        # Volatility
+        active_cids = list(range(pool_size)) # Firstly, get a list of all client IDs
+        for _ in range(num_on_strike):
+            pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
+            active_cids.pop(pop_idx)
 
         # 1st iteration: data size only
         if server_round == 1:
             for i in range(pool_size):
-                param_dicts[i]["sigma"] = 1
-                param_dicts[i]["g"] = 0
-
-            # Volatility
-            active_cids = list(range(pool_size))
-            for _ in range(num_on_strike):
-                pop_idx = random.randint(0, len(active_cids) - 1)
-                active_cids.pop(pop_idx)
-
-            # TODO !!!
-            # available_cids = sorted(
-            #     active_cids, key=lambda i: param_dicts[i]["dataSize"], reverse=True # TODO C?
-            # )[:num_to_choose]
-
+                G_it[i] = param_dicts[i]["dataSize"]
         # Common cases
         else:
+            with open("./output/fit_server/round_{}.txt".format(server_round - 1)) as inputFile:
+                cids_in_prev_round = eval(inputFile.readline())["clients_selected"]
+
+            valid_loss_sum = 0.0
+            for n in range(pool_size):
+                if n in cids_in_prev_round:
+                    with open("./output/mean_square_batch_loss/client_{}.txt".format(n)) as inputFile:
+                        L_it[n] = eval(inputFile.readlines()[-1])
+                        valid_loss_sum += L_it[n]
+            
+            for n in range(pool_size):
+                if n not in cids_in_prev_round:
+                    L_it[n] = valid_loss_sum / len(cids_in_prev_round)
+
             with open("./output/involvement_history.txt", mode='r') as inputFile:
                 involvement_history = eval(inputFile.readline())
             for i in range(pool_size):
                 param_dicts[i]["involvement_history"] = involvement_history[i]
-
             log(DEBUG, "Involvement history: " + str(involvement_history))
 
-            with open("./output/fit_server/round_{}.txt".format(server_round - 1)) as inputFile:
-                cids_in_prev_round = eval(inputFile.readline())["clients_selected"]
-
-            # log(DEBUG, "Cids in previous round: " + str(cids_in_prev_round))
-
-            with open("./output/loss_avg/L_{}.txt".format(server_round - 2)) as inputFile:
-                L_2 = eval(inputFile.readline())
-
-            loss_of_prev_round = []
-            sum_of_loss_of_prev = 0.0
-            for n in range(pool_size):
-                with open("./output/val_loss/client_{}.txt".format(n)) as inputFile:
-                    loss_of_prev_round.append(eval(inputFile.readlines()[-1]))
-                if n in cids_in_prev_round:
-                    assert loss_of_prev_round[-1] > 0
-                    sum_of_loss_of_prev += loss_of_prev_round[-1]
-                else:
-                    assert loss_of_prev_round[-1] == -1
             for i in range(pool_size):
-                if i not in cids_in_prev_round:
-                    assert loss_of_prev_round[i] == -1
-                    # For those did not involve in previous rounds, loss should be the average
-                    loss_of_prev_round[i] = sum_of_loss_of_prev / len(cids_in_prev_round)
-                    # loss_of_prev_round[i] = L_2
+                G_it[i] = param_dicts[i]["dataSize"] * L_it[i] / ((param_dicts[i]["involvement_history"] + 1) ** alpha)
 
-            # log(DEBUG, "Loss in previous round: " + str(loss_of_prev_round))
+        sorted_cids = sorted(active_cids, key=lambda i: G_it[i], reverse=True)
 
-            delta = [0 for _ in range(pool_size)]
-            for i in range(pool_size):
-                delta[i] = L_2 - loss_of_prev_round[i]
+        ###### END OF STAGE 1 ##############################################################################
 
-            delta_min = min(delta)
-            delta_max = max(delta)
-            for i in range(pool_size):
-                # param_dicts[i]["sigma"] = 1 / (1 + math.pow(math.e, - delta))
-                param_dicts[i]["sigma"] = (delta[i] - delta_min) / (delta_max - delta_min)
-                
-            sum_of_prev_C = [0 for _ in range(pool_size)]
-            for t in range(1, server_round):
-                with open("./output/fit_server/round_{}.txt".format(t)) as inputFile:
-                    cids_in_t_round = eval(inputFile.readline())["clients_selected"]
-                with open("./output/C_records/round_{}.txt".format(t)) as inputFile:
-                    C_in_t_round = eval(inputFile.readline())
-                for _ in range(pool_size):
-                    if _ in cids_in_t_round:
-                        sum_of_prev_C[_] += C_in_t_round[_]
+        ###### STAGE 2 - Selection of Clients ##############################################################
 
-            # log(DEBUG, "Sum of C in previous round: " + str(sum_of_prev_C))
-            
-            UCB_mu = []
-            for i in range(pool_size):
-                if involvement_history[i] == 0:
-                    UCB_mu.append(0)
-                else:
-                    UCB_mu.append(sum_of_prev_C[i] / involvement_history[i])
-                param_dicts[i]["UCB_mu"] = UCB_mu[i]
+        
 
-            # log(DEBUG, "UCB_mu: " + str(UCB_mu))
-
-            UCB_u = []
-            for i in range(pool_size):
-                if involvement_history[i] == 0:
-                    UCB_u.append(0)
-                else:
-                    UCB_u.append(
-                        UCB_mu[i] + math.sqrt(
-                            (num_to_choose + 1) * math.log(server_round) / involvement_history[i]
-                        )
-                    )
-                param_dicts[i]["UCB_U"] = UCB_u[i]
-                
-            # log(DEBUG, "UCB_U: " + str(UCB_u))
-
-            denominator = 0.0
-            for k in cids_in_prev_round:
-                denominator += param_dicts[k]["dataSize"] * param_dicts[k]["sigma"]
-
-            for i in range(pool_size):
-                sgn = (num_to_choose * param_dicts[i]["dataSize"] * param_dicts[i]["sigma"] / denominator) \
-                    - (involvement_history[i] / server_round)
-                if sgn > 0:
-                    sgn = 1
-                elif sgn < 0:
-                    sgn = -1
-                
-                param_dicts[i]["g"] = sgn * math.pow(
-                    abs(
-                        (num_to_choose * param_dicts[i]["dataSize"] * param_dicts[i]["sigma"] / denominator) \
-                        - (involvement_history[i] / server_round)
-                    ),
-                    alpha
-                )
-
-            # TODO UCB_omega = [(- UCB_u[i] + beta * param_dicts[i]["g"]) for i in range(pool_size)]
-            UCB_omega = [(- UCB_u[i]) for i in range(pool_size)]
-            for i in range(pool_size):
-                param_dicts[i]["UCB_omega"] = UCB_omega[i]
-
-            # log(DEBUG, "UCB_omega: " + str(UCB_omega))
-
-            # Volatility
-            active_cids = list(range(pool_size))
-            for _ in range(num_on_strike):
-                pop_idx = random.randint(0, len(active_cids) - 1)
-                active_cids.pop(pop_idx)
-
-            # TODO !!!
-            # available_cids = sorted(
-            #     active_cids, key=lambda i: UCB_omega[i], reverse=True
-            # )[:num_to_choose]
+        ###### END OF STAGE 2 ##############################################################################
 
         # TODO RANDOM!!!
         # --------------------------------------------------------------------------------
@@ -515,17 +389,6 @@ class SFL(Strategy):
                     involvement_history[_] += 1
             with open("./output/involvement_history.txt", mode='w') as outputFile:
                 outputFile.write(str(involvement_history))
-
-        # Time constraint
-        # if server_round == 1:
-        #     C_T_i = timeConstrGlobal / num_rounds
-        # else:
-        #     with open(
-        #             "./output/fit_server/round_{}.txt".format(server_round - 1)
-        #     ) as inputFile:
-        #         fit_round_dict = eval(inputFile.readline())
-        #         C_T_i = timeConstrGlobal / num_rounds + \
-        #                 fit_round_dict["time_constraint"] - fit_round_dict["time_elapsed"]
 
         # Sample clients
         clients, fit_round_dict, param_dicts = client_manager.sample(

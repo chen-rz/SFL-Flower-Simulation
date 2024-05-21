@@ -24,8 +24,8 @@ if __name__ == "__main__":
 
     # clear previous records
     # TODO
-    path_to_init = ["fit_clients", "fit_server", "loss_avg",
-                    "train_loss", "val_accu", "val_loss", "C_records"]
+    path_to_init = ["fit_clients", "fit_server",
+                    "train_loss", "val_accu", "val_loss"]
     for _ in path_to_init:
         if Path("output/" + _ + "/").exists():
             shutil.rmtree("output/" + _ + "/")
