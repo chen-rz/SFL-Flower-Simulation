@@ -4,6 +4,7 @@ from logging import DEBUG, WARNING
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import flwr.common
+import numpy as np
 import pandas
 import torchvision
 from flwr.common import (
@@ -23,7 +24,7 @@ from constants import *
 from dataset_utils import cifar10Transformation
 
 
-class C2MAB_ClientManager(SimpleClientManager): # TODO
+class C2MAB_ClientManager(SimpleClientManager):
     def sample(self, num_clients: int, server_round=0, time_constr=0):
         # For model initialization
         if num_clients == 1:
@@ -42,7 +43,7 @@ class C2MAB_ClientManager(SimpleClientManager): # TODO
         # Sample clients which meet the criterion
         param_dicts = []
         sorted_cids = [] # For Stage 1
-        available_cids = [] # For Stage 2 (Final)
+        selected_cids = [] # For Stage 2 (Final)
 
         ###### STAGE 1 - Evaluation of Generalization ######################################################
 
@@ -114,31 +115,83 @@ class C2MAB_ClientManager(SimpleClientManager): # TODO
 
         ###### STAGE 2 - Selection of Clients ##############################################################
 
+        # C2MAB
+        list_device_context_vec_c = []
+        for i in range(pool_size):
+            list_device_context_vec_c.append(np.array([
+                param_dicts[i]["dataSize"],
+                1 / param_dicts[i]["splitLayer"],
+                param_dicts[i]["computation"],
+                param_dicts[i]["transPower"]
+            ]))
+
+        list_context_mat_A = []
+        list_context_vec_g = []
+        for i in range(pool_size):
+            with open("./output/client_context_mat_A/client_{}.txt".format(i)) as inputFile:
+                fileLine = inputFile.readline()
+                if not fileLine:
+                    list_context_mat_A.append(np.eye(4))
+                else:
+                    list_context_mat_A.append(eval(fileLine))
+            with open("./output/client_context_vec_g/client_{}.txt".format(i)) as inputFile:
+                fileLine = inputFile.readline()
+                if not fileLine:
+                    list_context_vec_g.append(np.zeros(4, 1))
+                else:
+                    list_context_vec_g.append(eval(fileLine))
         
+        list_theta_hat = []
+        for i in range(pool_size):
+            list_theta_hat.append(np.matmul(
+                np.linalg.inv(list_context_mat_A[i]),
+                list_context_vec_g[i]
+            ))
+
+        list_V = []
+        for i in range(pool_size):
+            list_V.append(
+                np.matmul(
+                    np.transpose(list_device_context_vec_c[i]),
+                    list_theta_hat[i]
+                ) + 
+                np.sqrt(
+                    np.matmul(
+                        np.matmul(
+                            np.transpose(list_device_context_vec_c[i]),
+                            np.linalg.inv(list_context_mat_A[i])
+                        ),
+                        list_device_context_vec_c[i]
+                    )
+                ) * beta
+            )
+        
+        cids_sorted_by_V = sorted(list(range(pool_size)), key=lambda i: list_V[i], reverse=True)
+
+        for i in sorted_cids:
+            if i in cids_sorted_by_V[ : int(pool_size * V_threshold)]:
+                selected_cids.append(i)
+            if len(selected_cids) == num_to_choose:
+                break
 
         ###### END OF STAGE 2 ##############################################################################
 
-        # TODO RANDOM!!!
-        # --------------------------------------------------------------------------------
-        cids_tbd = active_cids.copy()
-        for _ in range(pool_size - num_on_strike - num_to_choose):
-            pop_idx = random.randint(0, len(cids_tbd) - 1)
-            cids_tbd.pop(pop_idx)
+        ###### STAGE 3 - Resource Allocation based on Game Theory ##########################################
 
-        available_cids = cids_tbd.copy()
-        assert len(available_cids) == num_to_choose
-        # --------------------------------------------------------------------------------
+
+
+        ###### END OF STAGE 3 ##############################################################################
 
         # Record client parameters
         fit_round_time = 0
-        for _ in available_cids:
+        for _ in selected_cids:
             param_dicts[_]["isSelected"] = True
             if param_dicts[_]["updateTime"] > fit_round_time:
                 fit_round_time = param_dicts[_]["updateTime"]
 
         # Record reward
         reward = 0
-        for k in available_cids:
+        for k in selected_cids:
             reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
             # TODO reward += (- param_dicts[k]["C"])
         reward *= (1 / num_to_choose)
@@ -166,14 +219,14 @@ class C2MAB_ClientManager(SimpleClientManager): # TODO
         with open("./output/regret.txt", mode='a') as outputFile:
             outputFile.write(str(last_regret + regret_of_round) + "\n")
 
-        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(available_cids))
+        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
         log(DEBUG, "Round " + str(server_round) + " best cids: " + str(best_cids))
         log(DEBUG, "Round " + str(server_round) + " reward: " + str(reward))
         log(DEBUG, "Round " + str(server_round) + " best reward: " + str(best_reward))
 
-        return [self.clients[str(cid)] for cid in available_cids], \
+        return [self.clients[str(cid)] for cid in selected_cids], \
             {
-                "clients_selected": available_cids,
+                "clients_selected": selected_cids,
                 "time_elapsed": fit_round_time,
                 "time_constraint": time_constr
             }, \
@@ -212,8 +265,8 @@ class Random_ClientManager(SimpleClientManager):
             pop_idx = random.randint(0, len(cids_tbd) - 1)
             cids_tbd.pop(pop_idx)
 
-        available_cids = cids_tbd.copy()
-        assert len(available_cids) == num_to_choose
+        selected_cids = cids_tbd.copy()
+        assert len(selected_cids) == num_to_choose
 
         for n in range(pool_size):
             # Get each client's parameters
@@ -232,7 +285,7 @@ class Random_ClientManager(SimpleClientManager):
             param_dicts[n]["C"] = (param_dicts[n]["updateTime"] - C_min) / (C_max - C_min)
 
         fit_round_time = 0
-        for _ in available_cids:
+        for _ in selected_cids:
             param_dicts[_]["isSelected"] = True
             if param_dicts[_]["updateTime"] > fit_round_time:
                 fit_round_time = param_dicts[_]["updateTime"]
@@ -240,7 +293,7 @@ class Random_ClientManager(SimpleClientManager):
         # -----------------------------------------------------------------------------------------------------
         # Record reward
         reward = 0
-        for k in available_cids:
+        for k in selected_cids:
             # TODO reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
             reward += (- param_dicts[k]["C"])
         reward *= (1 / num_to_choose)
@@ -268,15 +321,15 @@ class Random_ClientManager(SimpleClientManager):
         with open("./output/regret.txt", mode='a') as outputFile:
             outputFile.write(str(last_regret + regret_of_round) + "\n")
 
-        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(available_cids))
+        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
         log(DEBUG, "Round " + str(server_round) + " best cids: " + str(best_cids))
         log(DEBUG, "Round " + str(server_round) + " reward: " + str(reward))
         log(DEBUG, "Round " + str(server_round) + " best reward: " + str(best_reward))
         # -----------------------------------------------------------------------------------------------------
 
-        return [self.clients[str(cid)] for cid in available_cids], \
+        return [self.clients[str(cid)] for cid in selected_cids], \
             {
-                "clients_selected": available_cids,
+                "clients_selected": selected_cids,
                 "time_elapsed": fit_round_time,
                 "time_constraint": time_constr
             }, \
@@ -392,7 +445,7 @@ class SFL(Strategy):
 
         # Sample clients
         clients, fit_round_dict, param_dicts = client_manager.sample(
-            num_clients=0, server_round=server_round, time_constr=timeConstrGlobal
+            num_clients=0, server_round=server_round, time_constr=None
         )
 
         # Record information of clients
@@ -424,7 +477,7 @@ class SFL(Strategy):
 
         # Sample clients: use same clients as in fit
         clients = client_manager.sample(
-            num_clients=-1, server_round=server_round, time_constr=timeConstrGlobal
+            num_clients=-1, server_round=server_round, time_constr=None
         )
 
         # Return client/config pairs

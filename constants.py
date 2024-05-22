@@ -24,3 +24,15 @@ sys_bandwidth = 1e6
 
 # Alpha for Generalization
 alpha = 0.5
+
+# Beta for C2MAB
+beta = 0.5
+
+# Threshold rate for C2MAB V
+V_threshold = 0.5
+
+# Model type
+model_type = "AlexNet"
+
+# Dataset type
+dataset_type = "CIFAR-10"

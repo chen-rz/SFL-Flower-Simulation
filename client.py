@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from pathlib import Path
+import random
 from typing import Dict, List
 
 import flwr as fl
@@ -12,7 +13,8 @@ from flwr.common import Scalar
 
 from dataset_utils import get_dataloader
 from utils import *
-from constants import sys_modelFlops
+import constants
+from model_statistics import model_statistics
 
 
 # Flower client
@@ -23,15 +25,20 @@ class FlowerClient(fl.client.NumPyClient):
         self.properties: Dict[str, Scalar] = {"tensor_type": "numpy.ndarray"}
 
         # Instantiate model
-        self.net = AlexNet()
+        if constants.model_type == "AlexNet":
+            self.net = AlexNet()
+            model_layer_num = len(model_statistics(constants.model_type, constants.dataset_type)[0])
+            self.properties["splitLayer"] = random.randint(1, model_layer_num)
+        else:
+            raise ValueError("Model type not supported")
 
         # Determine device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Randomly initialized parameters
         self.properties["dataSize"] = param_dict["dataSize"]
-        self.properties["computation"] = param_dict["computation"]
-        self.properties["transPower"] = param_dict["transPower"]
+        self.properties["computation"] = param_dict["computation"] * random.uniform(0.75, 1.25)
+        self.properties["transPower"] = param_dict["transPower"] * random.uniform(0.75, 1.25)
 
     def get_properties(self, config) -> Dict[str, Scalar]:
         return self.properties

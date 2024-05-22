@@ -83,7 +83,7 @@ def get_split_model_statistics(model, dataset, split_layer: int, backprop_comput
     assert len(layer_flops) == len(inter_data_size)
 
     if split_layer < 1 or split_layer > len(layer_flops): # 1 to N
-        raise ValueError("Invalid split layer!")
+        raise ValueError("Invalid split layer")
     
     flops_f_device = sum(layer_flops[:split_layer])
     flops_f_server = sum(layer_flops[split_layer:])
