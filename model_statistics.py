@@ -74,15 +74,16 @@ def model_statistics(model, dataset):
             layer_flops = [0, 123900, 241600, 48000, 10080, 840]
             inter_data_size = [4, 1.56, 6.25, 0.47, 0.33, 0.04] # KB
 
-    return layer_flops, inter_data_size
+    assert len(layer_flops) == len(inter_data_size)
+    
+    return len(layer_flops), layer_flops, inter_data_size
 
 
 def get_split_model_statistics(model, dataset, split_layer: int, backprop_compute_coef = 2.0):
     
-    layer_flops, inter_data_size = model_statistics(model=model, dataset=dataset)
-    assert len(layer_flops) == len(inter_data_size)
+    layer_num, layer_flops, inter_data_size = model_statistics(model=model, dataset=dataset)
 
-    if split_layer < 1 or split_layer > len(layer_flops): # 1 to N
+    if split_layer < 1 or split_layer > layer_num: # 1 to N
         raise ValueError("Invalid split layer")
     
     flops_f_device = sum(layer_flops[:split_layer])
@@ -95,3 +96,10 @@ def get_split_model_statistics(model, dataset, split_layer: int, backprop_comput
     inter_data_trans = inter_data_size[split_layer - 1]
     
     return flops_f_device, flops_f_server, flops_b_device, flops_b_server, inter_data_trans
+
+
+FLP_F_D = 0
+FLP_F_S = 1
+FLP_B_D = 2
+FLP_B_S = 3
+INT_TRANS = 4

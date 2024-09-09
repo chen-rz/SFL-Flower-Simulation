@@ -13,7 +13,7 @@ from flwr.common import Scalar
 
 from dataset_utils import get_dataloader
 from utils import *
-import constants
+from constants import *
 from model_statistics import model_statistics
 
 
@@ -24,10 +24,10 @@ class FlowerClient(fl.client.NumPyClient):
         self.fed_dir = Path(fed_dir_data)
         self.properties: Dict[str, Scalar] = {"tensor_type": "numpy.ndarray"}
 
-        # Instantiate model
-        if constants.model_type == "AlexNet":
+        # TODO Instantiate model
+        if MODEL_TYPE == "AlexNet":
             self.net = AlexNet()
-            model_layer_num = len(model_statistics(constants.model_type, constants.dataset_type)[0])
+            model_layer_num = model_statistics(MODEL_TYPE, DATASET_TYPE)[0]
             self.properties["splitLayer"] = random.randint(1, model_layer_num)
         else:
             raise ValueError("Model type not supported")
@@ -121,7 +121,7 @@ def fit_config(server_round: int) -> Dict[str, Scalar]:
     """Return a configuration with static batch size and (local) epochs."""
     config = {
         "epochs": 5,  # number of local epochs
-        "batch_size": 64,
+        "batch_size": BATCH_SIZE,
     }
     return config
 

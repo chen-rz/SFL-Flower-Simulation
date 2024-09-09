@@ -1,38 +1,44 @@
 # Number of dataset partions (= number of total clients)
-pool_size = 100
+POOL_SIZE = 100
 
 # Number of participants in each round
-num_to_choose = 20
+NUM_TO_CHOOSE = 20
 
 # Volatility
-num_on_strike = 0
+NUM_ON_STRIKE = 0
 
 # Global iterations
-num_rounds = 10
-
-# Model flops
-sys_modelFlops = 712651338 # AlexNet
+NUM_ROUNDS = 10
 
 # Channel gain
-sys_channelGain = 4e-11
+CHANNEL_GAIN = 4e-11
 
 # Background noise
-sys_bgNoise = 1e-13
+BG_NOISE_POWER = 1e-13
 
 # Total bandwidth
-sys_bandwidth = 1e6
+MAX_BANDWIDTH = 1e6
+
+# Server capacity
+SERVER_CAPACITY = 6
+
+# Server computation
+SERVER_COMPUTATION = 5e10
 
 # Alpha for Generalization
-alpha = 0.5
+ALPHA = 0.5
 
 # Beta for C2MAB
-beta = 0.5
+BETA = 0.5
 
 # Threshold rate for C2MAB V
-V_threshold = 0.5
+V_THRESHOLD = 0.5
 
 # Model type
-model_type = "AlexNet"
+MODEL_TYPE = "AlexNet"
 
 # Dataset type
-dataset_type = "CIFAR-10"
+DATASET_TYPE = "CIFAR-10"
+
+# Batch size
+BATCH_SIZE = 64

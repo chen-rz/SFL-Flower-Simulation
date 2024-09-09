@@ -62,11 +62,11 @@ class C2MAB_ClientManager(SimpleClientManager):
         #     eval_res = init_eval_func(0, init_param_ndarrays, {})
         #     initial_loss = eval_res[0]
 
-        L_it = [1 for _ in range(pool_size)] # The mean square batch loss of each client
-        G_it = [0 for _ in range(pool_size)] # The generalization evaluation of each client
+        L_it = [1 for _ in range(POOL_SIZE)] # The mean square batch loss of each client
+        G_it = [0 for _ in range(POOL_SIZE)] # The generalization evaluation of each client
 
         # Get each client's parameters
-        for n in range(pool_size):
+        for n in range(POOL_SIZE):
             param_dicts.append(
                 self.clients[str(n)].get_properties(
                     flwr.common.GetPropertiesIns(config={}), 68400
@@ -75,14 +75,14 @@ class C2MAB_ClientManager(SimpleClientManager):
             param_dicts[n]["isSelected"] = False
 
         # Volatility
-        active_cids = list(range(pool_size)) # Firstly, get a list of all client IDs
-        for _ in range(num_on_strike):
+        active_cids = list(range(POOL_SIZE)) # Firstly, get a list of all client IDs
+        for _ in range(NUM_ON_STRIKE):
             pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
             active_cids.pop(pop_idx)
 
         # 1st iteration: data size only
         if server_round == 1:
-            for i in range(pool_size):
+            for i in range(POOL_SIZE):
                 G_it[i] = param_dicts[i]["dataSize"]
         # Common cases
         else:
@@ -90,26 +90,26 @@ class C2MAB_ClientManager(SimpleClientManager):
                 cids_in_prev_round = eval(inputFile.readline())["clients_selected"]
 
             valid_loss_sum = 0.0
-            for n in range(pool_size):
+            for n in range(POOL_SIZE):
                 if n in cids_in_prev_round:
                     with open("./output/mean_square_batch_loss/client_{}.txt".format(n)) as inputFile:
                         L_it[n] = eval(inputFile.readlines()[-1])
                         valid_loss_sum += L_it[n]
             
-            for n in range(pool_size):
+            for n in range(POOL_SIZE):
                 if n not in cids_in_prev_round:
                     L_it[n] = valid_loss_sum / len(cids_in_prev_round)
 
             with open("./output/involvement_history.txt", mode='r') as inputFile:
                 involvement_history = eval(inputFile.readline())
-            for i in range(pool_size):
+            for i in range(POOL_SIZE):
                 param_dicts[i]["involvement_history"] = involvement_history[i]
             log(DEBUG, "Involvement history: " + str(involvement_history))
 
-            for i in range(pool_size):
-                G_it[i] = param_dicts[i]["dataSize"] * L_it[i] / ((param_dicts[i]["involvement_history"] + 1) ** alpha)
+            for i in range(POOL_SIZE):
+                G_it[i] = param_dicts[i]["dataSize"] * L_it[i] / ((param_dicts[i]["involvement_history"] + 1) ** ALPHA)
 
-        sorted_cids = sorted(active_cids, key=lambda i: G_it[i], reverse=True)
+        sorted_cids = sorted(active_cids, key=lambda i: G_it[i], reverse=True) # Sort according to the generalization evaluation
 
         ###### END OF STAGE 1 ##############################################################################
 
@@ -117,7 +117,7 @@ class C2MAB_ClientManager(SimpleClientManager):
 
         # C2MAB
         list_device_context_vec_c = []
-        for i in range(pool_size):
+        for i in range(POOL_SIZE):
             list_device_context_vec_c.append(np.array([
                 param_dicts[i]["dataSize"],
                 1 / param_dicts[i]["splitLayer"],
@@ -127,7 +127,7 @@ class C2MAB_ClientManager(SimpleClientManager):
 
         list_context_mat_A = []
         list_context_vec_g = []
-        for i in range(pool_size):
+        for i in range(POOL_SIZE):
             with open("./output/client_context_mat_A/client_{}.txt".format(i)) as inputFile:
                 fileLine = inputFile.readline()
                 if not fileLine:
@@ -142,14 +142,14 @@ class C2MAB_ClientManager(SimpleClientManager):
                     list_context_vec_g.append(eval(fileLine))
         
         list_theta_hat = []
-        for i in range(pool_size):
+        for i in range(POOL_SIZE):
             list_theta_hat.append(np.matmul(
                 np.linalg.inv(list_context_mat_A[i]),
                 list_context_vec_g[i]
             ))
 
         list_V = []
-        for i in range(pool_size):
+        for i in range(POOL_SIZE):
             list_V.append(
                 np.matmul(
                     np.transpose(list_device_context_vec_c[i]),
@@ -163,15 +163,16 @@ class C2MAB_ClientManager(SimpleClientManager):
                         ),
                         list_device_context_vec_c[i]
                     )
-                ) * beta
+                ) * BETA
             )
         
-        cids_sorted_by_V = sorted(list(range(pool_size)), key=lambda i: list_V[i], reverse=True)
+        cids_sorted_by_V = sorted(list(range(POOL_SIZE)), key=lambda i: list_V[i], reverse=True)
 
         for i in sorted_cids:
-            if i in cids_sorted_by_V[ : int(pool_size * V_threshold)]:
+            if i in cids_sorted_by_V[ : int(POOL_SIZE * V_THRESHOLD)]:
                 selected_cids.append(i)
-            if len(selected_cids) == num_to_choose:
+                param_dicts[i]["isSelected"] = True
+            if len(selected_cids) == NUM_TO_CHOOSE:
                 break
 
         ###### END OF STAGE 2 ##############################################################################
@@ -192,23 +193,23 @@ class C2MAB_ClientManager(SimpleClientManager):
         # Record reward
         reward = 0
         for k in selected_cids:
-            reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
+            reward += (- param_dicts[k]["C"] + BETA * param_dicts[k]["g"])
             # TODO reward += (- param_dicts[k]["C"])
-        reward *= (1 / num_to_choose)
+        reward *= (1 / NUM_TO_CHOOSE)
         with open("./output/reward.txt", mode='a') as outputFile:
             outputFile.write(str(reward) + "\n")
 
         # Calculate regret
         best_cids = sorted(
-            active_cids, key=lambda i: (- param_dicts[i]["C"] + beta * param_dicts[i]["g"]),
+            active_cids, key=lambda i: (- param_dicts[i]["C"] + BETA * param_dicts[i]["g"]),
             # TODO active_cids, key=lambda i: (- param_dicts[i]["C"]),
             reverse=True
-        )[:num_to_choose]
+        )[:NUM_TO_CHOOSE]
         best_reward = 0
         for k in best_cids:
-            best_reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
+            best_reward += (- param_dicts[k]["C"] + BETA * param_dicts[k]["g"])
             # TODO best_reward += (- param_dicts[k]["C"])
-        best_reward *= (1 / num_to_choose)
+        best_reward *= (1 / NUM_TO_CHOOSE)
         regret_of_round = best_reward - reward
         with open("./output/regret.txt", mode='r') as inputFile:
             lines = inputFile.readlines()
@@ -237,7 +238,7 @@ class Random_ClientManager(SimpleClientManager):
     def sample(self, num_clients: int, server_round=0, time_constr=0):
         # For model initialization
         if num_clients == 1:
-            return [self.clients[str(random.randint(0, pool_size - 1))]]
+            return [self.clients[str(random.randint(0, POOL_SIZE - 1))]]
 
         # For evaluation
         elif num_clients == -1:
@@ -254,21 +255,21 @@ class Random_ClientManager(SimpleClientManager):
 
         # -----------------------------------------------------------------------------------------------------
         # Volatility
-        active_cids = list(range(pool_size))
-        for _ in range(num_on_strike):
+        active_cids = list(range(POOL_SIZE))
+        for _ in range(NUM_ON_STRIKE):
             pop_idx = random.randint(0, len(active_cids) - 1)
             active_cids.pop(pop_idx)
         # -----------------------------------------------------------------------------------------------------
 
         cids_tbd = active_cids.copy()
-        for _ in range(pool_size - num_on_strike - num_to_choose):
+        for _ in range(POOL_SIZE - NUM_ON_STRIKE - NUM_TO_CHOOSE):
             pop_idx = random.randint(0, len(cids_tbd) - 1)
             cids_tbd.pop(pop_idx)
 
         selected_cids = cids_tbd.copy()
-        assert len(selected_cids) == num_to_choose
+        assert len(selected_cids) == NUM_TO_CHOOSE
 
-        for n in range(pool_size):
+        for n in range(POOL_SIZE):
             # Get each client's parameters
             param_dicts.append(
                 self.clients[str(n)].get_properties(
@@ -281,7 +282,7 @@ class Random_ClientManager(SimpleClientManager):
 
         C_min = min(updateTimeList)
         C_max = max(updateTimeList)
-        for n in range(pool_size):
+        for n in range(POOL_SIZE):
             param_dicts[n]["C"] = (param_dicts[n]["updateTime"] - C_min) / (C_max - C_min)
 
         fit_round_time = 0
@@ -296,7 +297,7 @@ class Random_ClientManager(SimpleClientManager):
         for k in selected_cids:
             # TODO reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
             reward += (- param_dicts[k]["C"])
-        reward *= (1 / num_to_choose)
+        reward *= (1 / NUM_TO_CHOOSE)
         with open("./output/reward.txt", mode='a') as outputFile:
             outputFile.write(str(reward) + "\n")
 
@@ -305,12 +306,12 @@ class Random_ClientManager(SimpleClientManager):
             # TODO active_cids, key=lambda i: (- param_dicts[i]["C"] + beta * param_dicts[i]["g"]),
             active_cids, key=lambda i: (- param_dicts[i]["C"]),
             reverse=True
-        )[:num_to_choose]
+        )[:NUM_TO_CHOOSE]
         best_reward = 0
         for k in best_cids:
             # TODO best_reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
             best_reward += (- param_dicts[k]["C"])
-        best_reward *= (1 / num_to_choose)
+        best_reward *= (1 / NUM_TO_CHOOSE)
         regret_of_round = best_reward - reward
         with open("./output/regret.txt", mode='r') as inputFile:
             lines = inputFile.readlines()
@@ -410,7 +411,7 @@ class SFL(Strategy):
             ) as inputFile:
                 clients_of_prev_round = eval(inputFile.readline())["clients_selected"]
 
-            for _ in range(pool_size):
+            for _ in range(POOL_SIZE):
                 # If the client was not selected in the previous round,
                 # help it complete the records
                 if _ not in clients_of_prev_round:
@@ -434,10 +435,10 @@ class SFL(Strategy):
             with open("./output/involvement_history.txt", mode='r') as inputFile:
                 fileLine = inputFile.readline()
                 if not fileLine:
-                    involvement_history = [0 for _ in range(pool_size)]
+                    involvement_history = [0 for _ in range(POOL_SIZE)]
                 else:
                     involvement_history = eval(fileLine)
-            for _ in range(pool_size):
+            for _ in range(POOL_SIZE):
                 if _ in clients_of_prev_round:
                     involvement_history[_] += 1
             with open("./output/involvement_history.txt", mode='w') as outputFile:

@@ -20,7 +20,7 @@ train_path, testset = get_cifar_10()
 
 # Partition dataset
 fed_dir = do_fl_partitioning(
-    train_path, pool_size=pool_size, alpha=args.alpha, num_classes=10, val_ratio=0.1
+    train_path, pool_size=POOL_SIZE, alpha=args.alpha, num_classes=10, val_ratio=0.1
 )
 
 # Record dataset sizes (number of data instances)
@@ -28,7 +28,7 @@ with open("./parameters/dataSize.txt", mode='w') as outputFile:
     outputFile.write("")
 with open("./output/label_distribution_histograms.txt", mode='r') as inputFile, \
     open("./parameters/dataSize.txt", mode='a') as outputFile:
-    for n in range(pool_size):
+    for n in range(POOL_SIZE):
         hist_line = inputFile.readline()
         assert hist_line
         outputFile.write(str(sum(eval(hist_line))) + "\n")
@@ -36,13 +36,13 @@ print("Dataset initialization completed")
 
 # Define CPU/GPU computational capabilities (FLOPs)
 with open("./parameters/computation.txt", mode='w') as outputFile:
-    for n in range(pool_size):
+    for n in range(POOL_SIZE):
         outputFile.write(str(random.gauss(mu=6e9, sigma=1.2e9)) + "\n")
         #(str(random.uniform(2e9, 10e9)) + "\n")
 print("CPU/GPU computational capabilites initialization completed")
 
 # Define transmission power
 with open("./parameters/transPower.txt", mode='w') as outputFile:
-    for n in range(pool_size):
+    for n in range(POOL_SIZE):
         outputFile.write(str(random.uniform(1e-3, 5e-3)) + "\n")
 print("Transmission power initialization completed")

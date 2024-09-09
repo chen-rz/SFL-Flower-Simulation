@@ -45,16 +45,16 @@ if __name__ == "__main__":
     }
 
     parameter_dict_list = []
-    for _ in range(pool_size):
+    for _ in range(POOL_SIZE):
         parameter_dict_list.append(dict())
     with open("./parameters/dataSize.txt") as inputFile:
-        for _ in range(pool_size):
+        for _ in range(POOL_SIZE):
             parameter_dict_list[_]["dataSize"] = eval(inputFile.readline())
     with open("./parameters/computation.txt") as inputFile:
-        for _ in range(pool_size):
+        for _ in range(POOL_SIZE):
             parameter_dict_list[_]["computation"] = eval(inputFile.readline())
     with open("./parameters/transPower.txt") as inputFile:
-        for _ in range(pool_size):
+        for _ in range(POOL_SIZE):
             parameter_dict_list[_]["transPower"] = eval(inputFile.readline())
 
 
@@ -87,9 +87,9 @@ if __name__ == "__main__":
     # start simulation
     simulation = fl.simulation.start_simulation(
         client_fn=client_fn,
-        num_clients=pool_size,
+        num_clients=POOL_SIZE,
         client_resources=client_resources,
-        config=fl.server.ServerConfig(num_rounds=num_rounds),
+        config=fl.server.ServerConfig(num_rounds=NUM_ROUNDS),
         strategy=strategy,
         client_manager=client_manager,
         ray_init_args=ray_init_args,
@@ -107,12 +107,12 @@ if __name__ == "__main__":
     ###############################################################################
     # Check records of last round
     with open(
-            "./output/fit_server/round_{}.txt".format(num_rounds),
+            "./output/fit_server/round_{}.txt".format(NUM_ROUNDS),
             mode='r'
     ) as last_inputFile:
         clients_of_last_round = eval(last_inputFile.readline())["clients_selected"]
 
-    for _ in range(pool_size):
+    for _ in range(POOL_SIZE):
         # If the client was not selected in the last round,
         # help it complete the records
         if _ not in clients_of_last_round:
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         fileLine = inputFile.readline()
         assert fileLine
         involvement_history = eval(fileLine)
-    for _ in range(pool_size):
+    for _ in range(POOL_SIZE):
         if _ in clients_of_last_round:
             involvement_history[_] += 1
     with open("./output/involvement_history.txt", mode='w') as outputFile:
