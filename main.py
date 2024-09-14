@@ -25,16 +25,13 @@ if __name__ == "__main__":
     # clear previous records
     # TODO
     path_to_init = ["fit_clients", "fit_server",
-                    "train_loss", "val_accu", "val_loss"]
+                    "train_loss", "val_accu", "val_loss",
+                    "mean_square_batch_loss", "client_context_mat_A", "client_context_vec_g"]
     for _ in path_to_init:
         if Path("output/" + _ + "/").exists():
             shutil.rmtree("output/" + _ + "/")
         os.mkdir("output/" + _ + "/")
 
-    with open("./output/reward.txt", mode='w') as outputFile:
-        outputFile.write("")
-    with open("./output/regret.txt", mode='w') as outputFile:
-        outputFile.write("")
     with open("./output/involvement_history.txt", mode='w') as outputFile:
         outputFile.write("")
     #############################################################

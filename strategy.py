@@ -1,4 +1,5 @@
 import math
+import os
 import random
 from logging import DEBUG, WARNING
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -22,6 +23,7 @@ from flwr.server.strategy.strategy import Strategy
 import client as clt
 from constants import *
 from dataset_utils import cifar10Transformation
+from game_theory import *
 
 
 class C2MAB_ClientManager(SimpleClientManager):
@@ -119,27 +121,26 @@ class C2MAB_ClientManager(SimpleClientManager):
         list_device_context_vec_c = []
         for i in range(POOL_SIZE):
             list_device_context_vec_c.append(np.array([
-                param_dicts[i]["dataSize"],
-                1 / param_dicts[i]["splitLayer"],
-                param_dicts[i]["computation"],
-                param_dicts[i]["transPower"]
+                [param_dicts[i]["dataSize"]],
+                [1 / param_dicts[i]["splitLayer"]],
+                [param_dicts[i]["computation"]],
+                [param_dicts[i]["transPower"]]
             ]))
 
         list_context_mat_A = []
         list_context_vec_g = []
+
         for i in range(POOL_SIZE):
-            with open("./output/client_context_mat_A/client_{}.txt".format(i)) as inputFile:
-                fileLine = inputFile.readline()
-                if not fileLine:
-                    list_context_mat_A.append(np.eye(4))
-                else:
-                    list_context_mat_A.append(eval(fileLine))
-            with open("./output/client_context_vec_g/client_{}.txt".format(i)) as inputFile:
-                fileLine = inputFile.readline()
-                if not fileLine:
-                    list_context_vec_g.append(np.zeros(4, 1))
-                else:
-                    list_context_vec_g.append(eval(fileLine))
+
+            if not os.path.exists("./output/client_context_mat_A/client_{}.npy".format(i)):
+                list_context_mat_A.append(np.eye(4))
+            else:
+                list_context_mat_A.append(np.load("./output/client_context_mat_A/client_{}.npy".format(i)))
+
+            if not os.path.exists("./output/client_context_vec_g/client_{}.npy".format(i)):
+                list_context_vec_g.append(np.zeros((4, 1)))
+            else:
+                list_context_vec_g.append(np.load("./output/client_context_vec_g/client_{}.npy".format(i)))
         
         list_theta_hat = []
         for i in range(POOL_SIZE):
@@ -174,67 +175,48 @@ class C2MAB_ClientManager(SimpleClientManager):
                 param_dicts[i]["isSelected"] = True
             if len(selected_cids) == NUM_TO_CHOOSE:
                 break
+        
+        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
 
         ###### END OF STAGE 2 ##############################################################################
 
         ###### STAGE 3 - Resource Allocation based on Game Theory ##########################################
 
+        offload_flag_dict = game_play(selected_cids, param_dicts)
+        max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
 
+        log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
 
         ###### END OF STAGE 3 ##############################################################################
 
-        # Record client parameters
-        fit_round_time = 0
-        for _ in selected_cids:
-            param_dicts[_]["isSelected"] = True
-            if param_dicts[_]["updateTime"] > fit_round_time:
-                fit_round_time = param_dicts[_]["updateTime"]
+        # Update context
 
-        # Record reward
-        reward = 0
-        for k in selected_cids:
-            reward += (- param_dicts[k]["C"] + BETA * param_dicts[k]["g"])
-            # TODO reward += (- param_dicts[k]["C"])
-        reward *= (1 / NUM_TO_CHOOSE)
-        with open("./output/reward.txt", mode='a') as outputFile:
-            outputFile.write(str(reward) + "\n")
+        new_list_context_mat_A = []
+        new_list_context_vec_g = []
 
-        # Calculate regret
-        best_cids = sorted(
-            active_cids, key=lambda i: (- param_dicts[i]["C"] + BETA * param_dicts[i]["g"]),
-            # TODO active_cids, key=lambda i: (- param_dicts[i]["C"]),
-            reverse=True
-        )[:NUM_TO_CHOOSE]
-        best_reward = 0
-        for k in best_cids:
-            best_reward += (- param_dicts[k]["C"] + BETA * param_dicts[k]["g"])
-            # TODO best_reward += (- param_dicts[k]["C"])
-        best_reward *= (1 / NUM_TO_CHOOSE)
-        regret_of_round = best_reward - reward
-        with open("./output/regret.txt", mode='r') as inputFile:
-            lines = inputFile.readlines()
-            if lines:
-                last_regret = eval(lines[-1])
-            else:
-                last_regret = 0.0
-        with open("./output/regret.txt", mode='a') as outputFile:
-            outputFile.write(str(last_regret + regret_of_round) + "\n")
+        for i in range(POOL_SIZE):
 
-        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
-        log(DEBUG, "Round " + str(server_round) + " best cids: " + str(best_cids))
-        log(DEBUG, "Round " + str(server_round) + " reward: " + str(reward))
-        log(DEBUG, "Round " + str(server_round) + " best reward: " + str(best_reward))
+            new_list_context_mat_A.append(list_context_mat_A[i] + np.matmul(
+                list_device_context_vec_c[i],
+                np.transpose(list_device_context_vec_c[i])
+            ))
+
+            np.save("./output/client_context_mat_A/client_{}.npy".format(i), new_list_context_mat_A[i])
+
+            new_list_context_vec_g.append(list_context_vec_g[i] + list_device_context_vec_c[i] * list_V[i])
+
+            np.save("./output/client_context_vec_g/client_{}.npy".format(i), new_list_context_vec_g[i])
 
         return [self.clients[str(cid)] for cid in selected_cids], \
             {
                 "clients_selected": selected_cids,
-                "time_elapsed": fit_round_time,
+                "time_elapsed": max_time_cost,
                 "time_constraint": time_constr
             }, \
             param_dicts
 
 
-class Random_ClientManager(SimpleClientManager):
+class Random_ClientManager(SimpleClientManager): # TODO: Implement this
     def sample(self, num_clients: int, server_round=0, time_constr=0):
         # For model initialization
         if num_clients == 1:
@@ -291,42 +273,7 @@ class Random_ClientManager(SimpleClientManager):
             if param_dicts[_]["updateTime"] > fit_round_time:
                 fit_round_time = param_dicts[_]["updateTime"]
 
-        # -----------------------------------------------------------------------------------------------------
-        # Record reward
-        reward = 0
-        for k in selected_cids:
-            # TODO reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
-            reward += (- param_dicts[k]["C"])
-        reward *= (1 / NUM_TO_CHOOSE)
-        with open("./output/reward.txt", mode='a') as outputFile:
-            outputFile.write(str(reward) + "\n")
-
-        # Calculate regret
-        best_cids = sorted(
-            # TODO active_cids, key=lambda i: (- param_dicts[i]["C"] + beta * param_dicts[i]["g"]),
-            active_cids, key=lambda i: (- param_dicts[i]["C"]),
-            reverse=True
-        )[:NUM_TO_CHOOSE]
-        best_reward = 0
-        for k in best_cids:
-            # TODO best_reward += (- param_dicts[k]["C"] + beta * param_dicts[k]["g"])
-            best_reward += (- param_dicts[k]["C"])
-        best_reward *= (1 / NUM_TO_CHOOSE)
-        regret_of_round = best_reward - reward
-        with open("./output/regret.txt", mode='r') as inputFile:
-            lines = inputFile.readlines()
-            if lines:
-                last_regret = eval(lines[-1])
-            else:
-                last_regret = 0.0
-        with open("./output/regret.txt", mode='a') as outputFile:
-            outputFile.write(str(last_regret + regret_of_round) + "\n")
-
         log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
-        log(DEBUG, "Round " + str(server_round) + " best cids: " + str(best_cids))
-        log(DEBUG, "Round " + str(server_round) + " reward: " + str(reward))
-        log(DEBUG, "Round " + str(server_round) + " best reward: " + str(best_reward))
-        # -----------------------------------------------------------------------------------------------------
 
         return [self.clients[str(cid)] for cid in selected_cids], \
             {

@@ -11,7 +11,7 @@ def game_play(selected_cids: list, param_dicts: list[dict]):
     
     available_server_blocks = SERVER_CAPACITY
 
-    while 1:
+    while True:
 
         if available_server_blocks <= 0:
             break

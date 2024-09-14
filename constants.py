@@ -8,7 +8,7 @@ NUM_TO_CHOOSE = 20
 NUM_ON_STRIKE = 0
 
 # Global iterations
-NUM_ROUNDS = 10
+NUM_ROUNDS = 100
 
 # Channel gain
 CHANNEL_GAIN = 4e-11
