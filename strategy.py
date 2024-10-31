@@ -86,6 +86,7 @@ class C2MAB_ClientManager(SimpleClientManager):
         if server_round == 1:
             for i in range(POOL_SIZE):
                 G_it[i] = param_dicts[i]["dataSize"]
+                param_dicts[i]["involvement_history"] = 0
         # Common cases
         else:
             with open("./output/fit_server/round_{}.txt".format(server_round - 1)) as inputFile:
@@ -166,6 +167,11 @@ class C2MAB_ClientManager(SimpleClientManager):
                     )
                 ) * BETA
             )
+
+            param_dicts[i]["reward"] = np.matmul(
+                np.transpose(list_device_context_vec_c[i]),
+                list_theta_hat[i]
+            )[0][0]
         
         cids_sorted_by_V = sorted(list(range(POOL_SIZE)), key=lambda i: list_V[i], reverse=True)
 
@@ -260,12 +266,8 @@ class Random_ClientManager(SimpleClientManager): # TODO: Implement this
             )
 
             param_dicts[n]["isSelected"] = False
-            updateTimeList.append(param_dicts[n]["updateTime"])
+            updateTimeList.append(param_dicts[n]["updateTime"]) # TODO: Implement random selection of offloading 
 
-        C_min = min(updateTimeList)
-        C_max = max(updateTimeList)
-        for n in range(POOL_SIZE):
-            param_dicts[n]["C"] = (param_dicts[n]["updateTime"] - C_min) / (C_max - C_min)
 
         fit_round_time = 0
         for _ in selected_cids:

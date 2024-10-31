@@ -1,7 +1,7 @@
 import random
 import argparse
 
-from constants import *
+from constants import POOL_SIZE
 from dataset_utils import get_cifar_10, do_fl_partitioning
 
 parser = argparse.ArgumentParser(description="Partition Dataset")
@@ -37,12 +37,16 @@ print("Dataset initialization completed")
 # Define CPU/GPU computational capabilities (FLOPs)
 with open("./parameters/computation.txt", mode='w') as outputFile:
     for n in range(POOL_SIZE):
-        outputFile.write(str(random.gauss(mu=6e9, sigma=1.2e9)) + "\n")
-        #(str(random.uniform(2e9, 10e9)) + "\n")
+        outputFile.write(str(random.uniform(1e9, 5e9)) + "\n")
 print("CPU/GPU computational capabilites initialization completed")
 
 # Define transmission power
 with open("./parameters/transPower.txt", mode='w') as outputFile:
     for n in range(POOL_SIZE):
-        outputFile.write(str(random.uniform(1e-3, 5e-3)) + "\n")
+        outputFile.write(str(random.uniform(0.08, 0.18)) + "\n")
 print("Transmission power initialization completed")
+
+# Define channel gain
+with open("./parameters/channelGain.txt", mode='w') as outputFile:
+    for n in range(POOL_SIZE):
+        outputFile.write(str(random.uniform(0.02, 0.05)) + "\n")

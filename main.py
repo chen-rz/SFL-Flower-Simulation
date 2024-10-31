@@ -23,7 +23,6 @@ if __name__ == "__main__":
     )
 
     # clear previous records
-    # TODO
     path_to_init = ["fit_clients", "fit_server",
                     "train_loss", "val_accu", "val_loss",
                     "mean_square_batch_loss", "client_context_mat_A", "client_context_vec_g"]
@@ -53,6 +52,9 @@ if __name__ == "__main__":
     with open("./parameters/transPower.txt") as inputFile:
         for _ in range(POOL_SIZE):
             parameter_dict_list[_]["transPower"] = eval(inputFile.readline())
+    with open("./parameters/channelGain.txt") as inputFile:
+        for _ in range(POOL_SIZE):
+            parameter_dict_list[_]["channelGain"] = eval(inputFile.readline())
 
 
     def client_fn(cid: str):
@@ -102,7 +104,7 @@ if __name__ == "__main__":
         outputFile.write(str(simulation.metrics_centralized))
 
     ###############################################################################
-    # Check records of last round
+    # Check records of the last round
     with open(
             "./output/fit_server/round_{}.txt".format(NUM_ROUNDS),
             mode='r'

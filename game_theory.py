@@ -19,26 +19,31 @@ def game_play(selected_cids: list, param_dicts: list[dict]):
         candidate_cids = [] # Record the cids that want a change
 
         for cid in selected_cids:
-            
+
             # 1/3 Calculate the cost without offloading
-            sm_stat = get_split_model_statistics(MODEL_TYPE, DATASET_TYPE, model_statistics(MODEL_TYPE, DATASET_TYPE)[0])
-            assert sm_stat[FLP_F_S] == 0
+            sm_stat = get_split_model_statistics(MODEL_TYPE, model_statistics(MODEL_TYPE)[0])
+            assert sm_stat[FLP_F_S] == 0 # No server part
             assert sm_stat[FLP_B_S] == 0
 
-            time_cost_no_offld = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
+            time_cost_no_offld = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
 
             # 2/3 Calculate the cost with offloading
-            sm_stat = get_split_model_statistics(MODEL_TYPE, DATASET_TYPE, param_dicts[cid]["splitLayer"])
-            time_device = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
-            time_server = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_S] + sm_stat[FLP_B_S]) / SERVER_COMPUTATION
+            sm_stat = get_split_model_statistics(MODEL_TYPE, param_dicts[cid]["splitLayer"])
+
+            time_device = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
+            time_server = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_S] + sm_stat[FLP_B_S]) / SERVER_COMPUTATION
 
             trans_intfr = 0
             for _ in selected_cids:
                 if offload_flag[_] == 1 and _ != cid:
-                    trans_intfr += param_dicts[_]["transPower"] * CHANNEL_GAIN
+                    trans_intfr += param_dicts[_]["transPower"] * param_dicts[_]["channelGain"]
             
-            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * CHANNEL_GAIN / (BG_NOISE_POWER + trans_intfr))
-            time_trans = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * sm_stat[INT_TRANS] * 2 / trans_rate
+            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
+
+            if trans_rate > TRANS_RATE_LIMIT:
+                trans_rate = TRANS_RATE_LIMIT
+
+            time_trans = EPOCHS * param_dicts[cid]["dataSize"] * sm_stat[INT_TRANS] * 2 / trans_rate
 
             time_cost_offld = time_device + time_server + time_trans
 
@@ -72,24 +77,34 @@ def time_cost_calc(selected_cids: list, param_dicts: list[dict], offload_flag: d
 
         if offload_flag[cid] == 0:
 
-            sm_stat = get_split_model_statistics(MODEL_TYPE, DATASET_TYPE, model_statistics(MODEL_TYPE, DATASET_TYPE)[0])
-            time_cost_dict[cid] = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
+            sm_stat = get_split_model_statistics(MODEL_TYPE, model_statistics(MODEL_TYPE)[0])
+
+            time_cost_dict[cid] = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
+
+            time_cost_dict[cid] += TIME_SYNC
         
         elif offload_flag[cid] == 1:
 
-            sm_stat = get_split_model_statistics(MODEL_TYPE, DATASET_TYPE, param_dicts[cid]["splitLayer"])
-            time_device = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
-            time_server = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * (sm_stat[FLP_F_S] + sm_stat[FLP_B_S]) / SERVER_COMPUTATION
+            sm_stat = get_split_model_statistics(MODEL_TYPE, param_dicts[cid]["splitLayer"])
+
+            time_device = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_D] + sm_stat[FLP_B_D]) / param_dicts[cid]["computation"]
+            time_server = EPOCHS * param_dicts[cid]["dataSize"] * (sm_stat[FLP_F_S] + sm_stat[FLP_B_S]) / SERVER_COMPUTATION
 
             trans_intfr = 0
             for _ in selected_cids:
                 if offload_flag[_] == 1 and _ != cid:
-                    trans_intfr += param_dicts[_]["transPower"] * CHANNEL_GAIN
+                    trans_intfr += param_dicts[_]["transPower"] * param_dicts[_]["channelGain"]
             
-            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * CHANNEL_GAIN / (BG_NOISE_POWER + trans_intfr))
-            time_trans = (param_dicts[cid]["dataSize"] / BATCH_SIZE) * sm_stat[INT_TRANS] * 2 / trans_rate
+            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
+
+            if trans_rate > TRANS_RATE_LIMIT:
+                trans_rate = TRANS_RATE_LIMIT
+
+            time_trans = EPOCHS * param_dicts[cid]["dataSize"] * sm_stat[INT_TRANS] * 2 / trans_rate
 
             time_cost_dict[cid] = time_device + time_server + time_trans
+
+            time_cost_dict[cid] += TIME_SYNC
     
     max_time_cost = max(time_cost_dict.values())
 

@@ -12,7 +12,7 @@ import torchvision
 from flwr.common import Scalar
 
 from dataset_utils import get_dataloader
-from utils import *
+import utils
 from constants import *
 from model_statistics import model_statistics
 
@@ -24,11 +24,11 @@ class FlowerClient(fl.client.NumPyClient):
         self.fed_dir = Path(fed_dir_data)
         self.properties: Dict[str, Scalar] = {"tensor_type": "numpy.ndarray"}
 
-        # TODO Instantiate model
-        if MODEL_TYPE == "AlexNet":
-            self.net = AlexNet()
-            model_layer_num = model_statistics(MODEL_TYPE, DATASET_TYPE)[0]
-            self.properties["splitLayer"] = random.randint(1, model_layer_num)
+        # TODO Instantiate more models here
+        if MODEL_TYPE == "alexnet":
+            self.net = torchvision.models.alexnet(num_classes=10)
+            model_layer_num = model_statistics(MODEL_TYPE)[0]
+            self.properties["splitLayer"] = random.randint(2, int(0.67 * model_layer_num) + 1)
         else:
             raise ValueError("Model type not supported")
 
@@ -39,6 +39,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.properties["dataSize"] = param_dict["dataSize"]
         self.properties["computation"] = param_dict["computation"] * random.uniform(0.75, 1.25)
         self.properties["transPower"] = param_dict["transPower"] * random.uniform(0.75, 1.25)
+        self.properties["channelGain"] = param_dict["channelGain"] * random.uniform(0.75, 1.25)
 
     def get_properties(self, config) -> Dict[str, Scalar]:
         return self.properties
@@ -65,7 +66,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.net.to(self.device)
 
         # Train
-        train_loss, mean_square_batch_loss = train(
+        train_loss, mean_square_batch_loss = utils.train(
             self.net, trainloader, epochs=config["epochs"], device=self.device
         )
 
@@ -99,7 +100,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.net.to(self.device)
 
         # Evaluate
-        loss, accuracy = test(self.net, valloader, device=self.device)
+        loss, accuracy = utils.test(self.net, valloader, device=self.device)
 
         # Record loss and accuracy
         with open(
@@ -120,7 +121,7 @@ class FlowerClient(fl.client.NumPyClient):
 def fit_config(server_round: int) -> Dict[str, Scalar]:
     """Return a configuration with static batch size and (local) epochs."""
     config = {
-        "epochs": 5,  # number of local epochs
+        "epochs": EPOCHS,  # number of local epochs
         "batch_size": BATCH_SIZE,
     }
     return config
@@ -149,13 +150,13 @@ def get_evaluate_fn(test_set: torchvision.datasets.CIFAR10, ):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        model = AlexNet()
+        model = torchvision.models.alexnet(num_classes=10)
 
         set_params(model, parameters)
         model.to(device)
 
         testloader = DataLoader(test_set, batch_size=50, num_workers=25)
-        loss, accuracy = test(model, testloader, device=device)
+        loss, accuracy = utils.test(model, testloader, device=device)
 
         # return statistics
         return loss, {"accuracy": accuracy}

@@ -8,22 +8,25 @@ NUM_TO_CHOOSE = 20
 NUM_ON_STRIKE = 0
 
 # Global iterations
-NUM_ROUNDS = 100
-
-# Channel gain
-CHANNEL_GAIN = 4e-11
+NUM_ROUNDS = 500
 
 # Background noise
 BG_NOISE_POWER = 1e-13
 
 # Total bandwidth
-MAX_BANDWIDTH = 1e6
+MAX_BANDWIDTH = 55e6
 
 # Server capacity
 SERVER_CAPACITY = 6
 
 # Server computation
-SERVER_COMPUTATION = 5e10
+SERVER_COMPUTATION = 600e9
+
+# Synchronization time
+TIME_SYNC = 60
+
+# Transmission rate limit
+TRANS_RATE_LIMIT = 64e6
 
 # Alpha for Generalization
 ALPHA = 0.5
@@ -35,10 +38,13 @@ BETA = 0.5
 V_THRESHOLD = 0.5
 
 # Model type
-MODEL_TYPE = "AlexNet"
+MODEL_TYPE = "alexnet"
 
-# Dataset type
-DATASET_TYPE = "CIFAR-10"
+# Epochs
+EPOCHS = 5
 
 # Batch size
-BATCH_SIZE = 64
+BATCH_SIZE = 32
+
+# Learning rate
+LEARNING_RATE = 0.0025
