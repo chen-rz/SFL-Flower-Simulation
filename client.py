@@ -32,7 +32,7 @@ class FlowerClient(fl.client.NumPyClient):
         else:
             raise ValueError("Model type not supported")
 
-        # Determine device
+        # TODO Determine device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Randomly initialized parameters
@@ -148,9 +148,14 @@ def get_evaluate_fn(test_set: torchvision.datasets.CIFAR10, ):
     ):
         """Use the entire CIFAR-10 test set for evaluation."""
 
+        # TODO Determine device
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        model = torchvision.models.alexnet(num_classes=10)
+        # TODO Instantiate more models here
+        if MODEL_TYPE == "alexnet":
+            model = torchvision.models.alexnet(num_classes=10)
+        else:
+            raise ValueError("Model type not supported")
 
         set_params(model, parameters)
         model.to(device)

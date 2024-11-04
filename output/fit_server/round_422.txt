@@ -1,1 +1,1 @@
-{'clients_selected': [74, 61, 91, 40, 66, 15, 45, 95, 87, 58, 65, 71, 52, 8, 11, 69, 26, 9, 27, 6], 'time_elapsed': 1952.1695771398172, 'time_constraint': None}
+{'clients_selected': [0, 3, 4, 6, 8, 10, 18, 19, 26, 31, 44, 60, 64, 66, 68, 77, 87, 88, 93, 94], 'time_elapsed': 3777.4613118738453, 'time_constraint': None}

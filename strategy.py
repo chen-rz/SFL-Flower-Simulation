@@ -1,4 +1,3 @@
-import math
 import os
 import random
 from logging import DEBUG, WARNING
@@ -222,13 +221,14 @@ class C2MAB_ClientManager(SimpleClientManager):
             param_dicts
 
 
-class Random_ClientManager(SimpleClientManager): # TODO: Implement this
+class Random_ClientManager(SimpleClientManager):
     def sample(self, num_clients: int, server_round=0, time_constr=0):
         # For model initialization
         if num_clients == 1:
-            return [self.clients[str(random.randint(0, POOL_SIZE - 1))]]
+            # return [self.clients[str(random.randint(0, pool_size - 1))]]
+            return [self.clients[str(0)]] # Designating client "0", this is for precisely retrieving its initial loss
 
-        # For evaluation
+        # For evaluation, use the same devices as in the fit round
         elif num_clients == -1:
             with open(
                     "./output/fit_server/round_{}.txt".format(server_round),
@@ -237,18 +237,26 @@ class Random_ClientManager(SimpleClientManager): # TODO: Implement this
                 cids_in_fit = eval(inputFile.readline())["clients_selected"]
             return [self.clients[str(cid)] for cid in cids_in_fit]
 
-        # Sample clients in a random way
+        # Sample clients randomly
         param_dicts = []
-        updateTimeList = []
+        selected_cids = []
 
-        # -----------------------------------------------------------------------------------------------------
+        # Get each client's parameters
+        for n in range(POOL_SIZE):
+            param_dicts.append(
+                self.clients[str(n)].get_properties(
+                    flwr.common.GetPropertiesIns(config={}), 68400
+                ).properties.copy()
+            )
+            param_dicts[n]["isSelected"] = False
+
         # Volatility
-        active_cids = list(range(POOL_SIZE))
+        active_cids = list(range(POOL_SIZE)) # Firstly, get a list of all client IDs
         for _ in range(NUM_ON_STRIKE):
-            pop_idx = random.randint(0, len(active_cids) - 1)
+            pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
             active_cids.pop(pop_idx)
-        # -----------------------------------------------------------------------------------------------------
 
+        # Random selection
         cids_tbd = active_cids.copy()
         for _ in range(POOL_SIZE - NUM_ON_STRIKE - NUM_TO_CHOOSE):
             pop_idx = random.randint(0, len(cids_tbd) - 1)
@@ -256,37 +264,31 @@ class Random_ClientManager(SimpleClientManager): # TODO: Implement this
 
         selected_cids = cids_tbd.copy()
         assert len(selected_cids) == NUM_TO_CHOOSE
-
-        for n in range(POOL_SIZE):
-            # Get each client's parameters
-            param_dicts.append(
-                self.clients[str(n)].get_properties(
-                    flwr.common.GetPropertiesIns(config={}), 68400
-                ).properties.copy()
-            )
-
-            param_dicts[n]["isSelected"] = False
-            updateTimeList.append(param_dicts[n]["updateTime"]) # TODO: Implement random selection of offloading 
-
-
-        fit_round_time = 0
-        for _ in selected_cids:
-            param_dicts[_]["isSelected"] = True
-            if param_dicts[_]["updateTime"] > fit_round_time:
-                fit_round_time = param_dicts[_]["updateTime"]
-
+        
+        for i in selected_cids:
+            param_dicts[i]["isSelected"] = True
+        
         log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
+
+        ###### Resource Allocation based on Game Theory #####################################################
+
+        offload_flag_dict = game_play(selected_cids, param_dicts)
+        max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
+
+        log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
+
+        ###### END ##########################################################################################
 
         return [self.clients[str(cid)] for cid in selected_cids], \
             {
                 "clients_selected": selected_cids,
-                "time_elapsed": fit_round_time,
+                "time_elapsed": max_time_cost,
                 "time_constraint": time_constr
             }, \
             param_dicts
 
 
-class SFL(Strategy):
+class SplitFederatedLearning(Strategy):
     # pylint: disable=too-many-arguments,too-many-instance-attributes,line-too-long
     def __init__(
             self,
@@ -316,7 +318,7 @@ class SFL(Strategy):
         self.evaluate_metrics_aggregation_fn = evaluate_metrics_aggregation_fn
 
     def __repr__(self) -> str:
-        rep = f"TCS (accept_failures={self.accept_failures})"
+        rep = f"Federated Learning (accept_failures={self.accept_failures})"
         return rep
 
     def initialize_parameters(
@@ -343,7 +345,7 @@ class SFL(Strategy):
 
     def configure_fit(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager]
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
@@ -395,7 +397,7 @@ class SFL(Strategy):
 
         # Sample clients
         clients, fit_round_dict, param_dicts = client_manager.sample(
-            num_clients=0, server_round=server_round, time_constr=None
+            num_clients=0, server_round=server_round, time_constr=None # num_clients and time_constr are not used
         )
 
         # Record information of clients
@@ -415,7 +417,7 @@ class SFL(Strategy):
 
     def configure_evaluate(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager]
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
         """Configure the next round of evaluation."""
         # Parameters and config
@@ -427,7 +429,7 @@ class SFL(Strategy):
 
         # Sample clients: use same clients as in fit
         clients = client_manager.sample(
-            num_clients=-1, server_round=server_round, time_constr=None
+            num_clients=-1, server_round=server_round, time_constr=None # num_clients and time_constr are not used
         )
 
         # Return client/config pairs
