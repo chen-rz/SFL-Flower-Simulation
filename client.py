@@ -13,7 +13,7 @@ from flwr.common import Scalar
 
 from dataset_utils import get_dataloader
 import utils
-from constants import *
+from constants import MODEL_TYPE, EPOCHS, BATCH_SIZE
 from model_statistics import model_statistics
 
 

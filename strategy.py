@@ -20,9 +20,9 @@ from flwr.server.strategy.aggregate import aggregate, weighted_loss_avg
 from flwr.server.strategy.strategy import Strategy
 
 import client as clt
-from constants import *
+from constants import POOL_SIZE, NUM_ON_STRIKE, NUM_TO_CHOOSE, ALPHA, V_THRESHOLD, BETA
 from dataset_utils import cifar10Transformation
-from game_theory import *
+from game_theory import game_play, time_cost_calc
 
 
 class C2MAB_ClientManager(SimpleClientManager):
@@ -288,6 +288,91 @@ class Random_ClientManager(SimpleClientManager):
             param_dicts
 
 
+class FedCS_ClientManager(SimpleClientManager):
+    def sample(self, num_clients: int, server_round=0, time_constr=0):
+        # For model initialization
+        if num_clients == 1:
+            # return [self.clients[str(random.randint(0, pool_size - 1))]]
+            return [self.clients[str(0)]] # Designating client "0", this is for precisely retrieving its initial loss
+
+        # For evaluation, use the same devices as in the fit round
+        elif num_clients == -1:
+            with open(
+                    "./output/fit_server/round_{}.txt".format(server_round),
+                    mode='r'
+            ) as inputFile:
+                cids_in_fit = eval(inputFile.readline())["clients_selected"]
+            return [self.clients[str(cid)] for cid in cids_in_fit]
+
+        # Sample the best clients after one-shot exploration
+        param_dicts = []
+        selected_cids = []
+
+        # Get each client's parameters
+        for n in range(POOL_SIZE):
+            param_dicts.append(
+                self.clients[str(n)].get_properties(
+                    flwr.common.GetPropertiesIns(config={}), 68400
+                ).properties.copy()
+            )
+            param_dicts[n]["isSelected"] = False
+
+        # Volatility
+        ##### ATTENTION ####################################################################################
+        if NUM_ON_STRIKE != 0:
+            raise ValueError("NUM_ON_STRIKE must be 0 for FedCS")
+        ####################################################################################################
+        active_cids = list(range(POOL_SIZE)) # Firstly, get a list of all client IDs
+        for _ in range(NUM_ON_STRIKE):
+            pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
+            active_cids.pop(pop_idx)
+
+        if server_round == 1:
+
+            selected_cids = active_cids.copy()
+
+        else:
+
+            with open("./output/fit_server/round_1.txt") as inputFile:
+                line_dict = eval(inputFile.readline())
+                cids_of_r1 = line_dict["clients_selected"]
+                time_cost_of_r1 = line_dict["time_cost_all"]
+
+            cids_sorted_by_r1 = sorted(cids_of_r1, key=lambda i: time_cost_of_r1[i], reverse=False)
+            selected_cids = cids_sorted_by_r1[ : NUM_TO_CHOOSE]
+        
+        for i in selected_cids:
+            param_dicts[i]["isSelected"] = True
+        
+        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
+
+        ###### Resource Allocation based on Game Theory #####################################################
+
+        offload_flag_dict = {}
+
+        if server_round == 1:
+            for i in selected_cids:
+                offload_flag_dict[i] = 0
+
+        else:
+            offload_flag_dict = game_play(selected_cids, param_dicts)
+
+        max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
+
+        log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
+
+        ###### END ##########################################################################################
+
+        return [self.clients[str(cid)] for cid in selected_cids], \
+            {
+                "clients_selected": selected_cids,
+                "time_elapsed": max_time_cost,
+                "time_cost_all": time_cost_dict, # TODO: Detailed time cost for each client
+                "time_constraint": time_constr
+            }, \
+            param_dicts
+
+
 class SplitFederatedLearning(Strategy):
     # pylint: disable=too-many-arguments,too-many-instance-attributes,line-too-long
     def __init__(
@@ -345,7 +430,7 @@ class SplitFederatedLearning(Strategy):
 
     def configure_fit(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager] # TODO: More client managers
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
@@ -417,7 +502,7 @@ class SplitFederatedLearning(Strategy):
 
     def configure_evaluate(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager] # TODO: More client managers
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
         """Configure the next round of evaluation."""
         # Parameters and config

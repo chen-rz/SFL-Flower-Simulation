@@ -1,7 +1,7 @@
 import math
 import random
 from model_statistics import *
-from constants import *
+from constants import SERVER_CAPACITY, SERVER_COMPUTATION, MODEL_TYPE, EPOCHS, MAX_BANDWIDTH, BG_NOISE_POWER, TRANS_RATE_LIMIT, TIME_SYNC
 
 def game_play(selected_cids: list, param_dicts: list[dict]):
 

@@ -39,6 +39,19 @@
                 "Random"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "FedCS",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--mode",
+                "FedCS"
+            ],
+            "justMyCode": false
         }
     ]
 }

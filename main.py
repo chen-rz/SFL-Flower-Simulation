@@ -4,8 +4,12 @@ import shutil
 from pathlib import Path
 
 import flwr as fl
+import torchvision
 
-from strategy import *
+import client as clt
+from dataset_utils import cifar10Transformation
+from constants import POOL_SIZE, NUM_ROUNDS
+from strategy import C2MAB_ClientManager, FedCS_ClientManager, Random_ClientManager, SplitFederatedLearning
 
 parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
 parser.add_argument("--num_client_cpus", type=int, default=6)
@@ -81,6 +85,8 @@ if __name__ == "__main__":
         client_manager = C2MAB_ClientManager()
     elif args.mode == "Random":
         client_manager = Random_ClientManager()
+    elif args.mode == "FedCS":
+        client_manager = FedCS_ClientManager()
     else:
         raise ValueError("Invalid mode")
 
