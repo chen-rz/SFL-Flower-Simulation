@@ -1,3 +1,4 @@
+import math
 import os
 import random
 from logging import DEBUG, WARNING
@@ -373,6 +374,189 @@ class FedCS_ClientManager(SimpleClientManager):
             param_dicts
 
 
+class Oort_ClientManager(SimpleClientManager):
+    def sample(self, num_clients: int, server_round=0, time_constr=0):
+        # For model initialization
+        if num_clients == 1:
+            # return [self.clients[str(random.randint(0, pool_size - 1))]]
+            return [self.clients[str(0)]] # Designating client "0", this is for precisely retrieving its initial loss
+
+        # For evaluation, use the same devices as in the fit round
+        elif num_clients == -1:
+            with open(
+                    "./output/fit_server/round_{}.txt".format(server_round),
+                    mode='r'
+            ) as inputFile:
+                cids_in_fit = eval(inputFile.readline())["clients_selected"]
+            return [self.clients[str(cid)] for cid in cids_in_fit]
+
+        # Sample clients which meet the criterion
+        param_dicts = []
+        selected_cids = []
+
+        ###### STAGE 1 - Evaluation of Utility ######################################################
+
+        # Get info of previous round
+        # if server_round == 1:
+        #     init_parameters = self.clients["0"].get_parameters(
+        #         ins=GetParametersIns(config={}),
+        #         timeout=None
+        #     ).parameters
+        #     init_param_ndarrays = parameters_to_ndarrays(init_parameters)
+        #     init_eval_func = clt.get_evaluate_fn(
+        #         torchvision.datasets.CIFAR10(
+        #             root="./data", train=False, transform=cifar10Transformation()
+        #         )
+        #     )
+        #     eval_res = init_eval_func(0, init_param_ndarrays, {})
+        #     initial_loss = eval_res[0]
+
+        L_it = [np.NaN for _ in range(POOL_SIZE)] # The mean square batch loss of each client
+
+        # Get each client's parameters
+        for n in range(POOL_SIZE):
+            param_dicts.append(
+                self.clients[str(n)].get_properties(
+                    flwr.common.GetPropertiesIns(config={}), 68400
+                ).properties.copy()
+            )
+            param_dicts[n]["isSelected"] = False
+
+        # Volatility
+        active_cids = list(range(POOL_SIZE)) # Firstly, get a list of all client IDs
+        for _ in range(NUM_ON_STRIKE):
+            pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
+            active_cids.pop(pop_idx)
+
+        # Dealing with involvement history
+
+        # 1st iteration: no involvement history
+        if server_round == 1:
+
+            for i in range(POOL_SIZE):
+                param_dicts[i]["involvement_history"] = 0
+                param_dicts[i]["last_involving_round"] = -1
+
+            log(DEBUG, "Involvement history: " + str([param_dicts[i]["involvement_history"] for i in range(POOL_SIZE)]))
+            log(DEBUG, "Last involving round: " + str([param_dicts[i]["last_involving_round"] for i in range(POOL_SIZE)]))
+
+        # Common cases
+        else:
+
+            with open("./output/fit_server/round_{}.txt".format(server_round - 1)) as inputFile:
+                cids_in_prev_round = eval(inputFile.readline())["clients_selected"]
+
+            for n in range(POOL_SIZE):
+                if n in cids_in_prev_round:
+                    with open("./output/mean_square_batch_loss/client_{}.txt".format(n)) as inputFile:
+                        L_it[n] = eval(inputFile.readlines()[-1])
+                else:
+                    L_it[n] = np.NaN
+
+            with open("./output/involvement_history.txt", mode='r') as inputFile:
+                involvement_history = eval(inputFile.readline())
+            for i in range(POOL_SIZE):
+                param_dicts[i]["involvement_history"] = involvement_history[i]
+
+            with open("./output/last_involving_round.txt", mode='r') as inputFile:
+                last_involving_round = eval(inputFile.readline())
+            for i in range(POOL_SIZE):
+                param_dicts[i]["last_involving_round"] = last_involving_round[i]
+
+            log(DEBUG, "Involvement history: " + str(involvement_history))
+            log(DEBUG, "Last involving round: " + str(last_involving_round))
+
+        # Calculating utility
+        oort_epsilon = 0.75
+        oort_alpha = 2
+
+        num_unexplored_to_choose = int(NUM_TO_CHOOSE * oort_epsilon)
+        num_explored_to_choose = NUM_TO_CHOOSE - num_unexplored_to_choose
+
+        unexplored_cids = []
+        explored_cids = []
+
+        for i in range(POOL_SIZE):
+
+            # If the client was not involved in the previous round, it is unexplored
+            if np.isnan(L_it[i]):
+                assert param_dicts[i]["last_involving_round"] < server_round - 1
+                unexplored_cids.append(i)
+                param_dicts[i]["oort_utility"] = np.NaN
+
+            # If the client was involved in the previous round, it is explored
+            else:
+                assert param_dicts[i]["last_involving_round"] == server_round - 1
+                explored_cids.append(i)
+                param_dicts[i]["oort_utility"] = L_it[i] * param_dicts[i]["dataSize"] + math.sqrt(0.1 * math.log(server_round, 10) / param_dicts[i]["last_involving_round"])
+
+        log(DEBUG, "Round " + str(server_round) + " unexplored cids " + str(unexplored_cids))
+        log(DEBUG, "Round " + str(server_round) + " explored cids " + str(explored_cids))
+
+        # For unexplored clients
+        sorted_unexplored_cids = sorted(unexplored_cids, key=lambda i: param_dicts[i]["computation"], reverse=True)
+        log(DEBUG, "Round " + str(server_round) + " sorted unexplored cids " + str(sorted_unexplored_cids))
+
+        # For explored clients
+        if server_round > 1:
+            
+            explored_cids_sorted_by_speed = sorted(explored_cids, key=lambda i: param_dicts[i]["computation"], reverse=True)
+            log(DEBUG, "Round " + str(server_round) + " explored cids sorted by speed " + str(explored_cids_sorted_by_speed))
+            
+            the_deadline_T = 1 / param_dicts[explored_cids_sorted_by_speed[int(len(explored_cids_sorted_by_speed) * V_THRESHOLD)]]["computation"]
+            log(DEBUG, "Round " + str(server_round) + " the deadline T " + str(the_deadline_T))
+            
+            for i in explored_cids:
+                if 1 / param_dicts[i]["computation"] > the_deadline_T:
+                    assert math.pow(the_deadline_T / (1 / param_dicts[i]["computation"]), oort_alpha) < 1
+                    param_dicts[i]["oort_utility"] *= math.pow(the_deadline_T / (1 / param_dicts[i]["computation"]), oort_alpha)
+            log(DEBUG, "Round " + str(server_round) + " oort utility " + str([param_dicts[i]["oort_utility"] for i in range(POOL_SIZE)]))
+
+            sorted_explored_cids = sorted(explored_cids, key=lambda i: param_dicts[i]["oort_utility"], reverse=True)
+            log(DEBUG, "Round " + str(server_round) + " sorted explored cids " + str(sorted_explored_cids))
+
+        ###### END OF STAGE 1 ##############################################################################
+
+        ###### STAGE 2 - Selection of Clients ##############################################################
+
+        # 1st round: only select unexplored clients as all clients are unexplored
+        if server_round == 1:
+            selected_cids = sorted_unexplored_cids[ : NUM_TO_CHOOSE]
+        # Common cases
+        else:
+            selected_cids += sorted_unexplored_cids[ : num_unexplored_to_choose]
+            selected_cids += sorted_explored_cids[ : num_explored_to_choose]
+            assert len(selected_cids) == NUM_TO_CHOOSE
+
+        for i in selected_cids:
+            param_dicts[i]["isSelected"] = True
+            param_dicts[i]["last_involving_round"] = server_round
+
+        with open("./output/last_involving_round.txt", mode='w') as outputFile:
+            outputFile.write(str([param_dicts[i]["last_involving_round"] for i in range(POOL_SIZE)]))
+        
+        log(DEBUG, "Round " + str(server_round) + " selected cids " + str(selected_cids))
+
+        ###### END OF STAGE 2 ##############################################################################
+
+        ###### STAGE 3 - Resource Allocation based on Game Theory ##########################################
+
+        offload_flag_dict = game_play(selected_cids, param_dicts)
+        max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
+
+        log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
+
+        ###### END OF STAGE 3 ##############################################################################
+
+        return [self.clients[str(cid)] for cid in selected_cids], \
+            {
+                "clients_selected": selected_cids,
+                "time_elapsed": max_time_cost,
+                "time_constraint": time_constr
+            }, \
+            param_dicts
+
+
 class SplitFederatedLearning(Strategy):
     # pylint: disable=too-many-arguments,too-many-instance-attributes,line-too-long
     def __init__(
@@ -430,7 +614,7 @@ class SplitFederatedLearning(Strategy):
 
     def configure_fit(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager] # TODO: More client managers
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager, Oort_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
@@ -502,7 +686,7 @@ class SplitFederatedLearning(Strategy):
 
     def configure_evaluate(
             self, server_round: int, parameters: Parameters,
-            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager] # TODO: More client managers
+            client_manager: Union[C2MAB_ClientManager, Random_ClientManager, FedCS_ClientManager, Oort_ClientManager] # TODO: More client managers
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
         """Configure the next round of evaluation."""
         # Parameters and config

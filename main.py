@@ -9,7 +9,7 @@ import torchvision
 import client as clt
 from dataset_utils import cifar10Transformation
 from constants import POOL_SIZE, NUM_ROUNDS
-from strategy import C2MAB_ClientManager, FedCS_ClientManager, Random_ClientManager, SplitFederatedLearning
+from strategy import C2MAB_ClientManager, FedCS_ClientManager, Random_ClientManager, Oort_ClientManager, SplitFederatedLearning
 
 parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
 parser.add_argument("--num_client_cpus", type=int, default=6)
@@ -36,6 +36,9 @@ if __name__ == "__main__":
         os.mkdir("output/" + _ + "/")
 
     with open("./output/involvement_history.txt", mode='w') as outputFile:
+        outputFile.write("")
+
+    with open("./output/last_involving_round.txt", mode='w') as outputFile:
         outputFile.write("")
     #############################################################
 
@@ -87,6 +90,8 @@ if __name__ == "__main__":
         client_manager = Random_ClientManager()
     elif args.mode == "FedCS":
         client_manager = FedCS_ClientManager()
+    elif args.mode == "Oort":
+        client_manager = Oort_ClientManager()
     else:
         raise ValueError("Invalid mode")
 

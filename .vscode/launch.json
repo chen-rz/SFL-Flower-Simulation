@@ -52,6 +52,19 @@
                 "FedCS"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "Oort",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--mode",
+                "Oort"
+            ],
+            "justMyCode": false
         }
     ]
 }
