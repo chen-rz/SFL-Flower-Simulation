@@ -1,7 +1,7 @@
 import math
 import random
 from model_statistics import *
-from constants import SERVER_CAPACITY, SERVER_COMPUTATION, MODEL_TYPE, EPOCHS, MAX_BANDWIDTH, BG_NOISE_POWER, TRANS_RATE_LIMIT, TIME_SYNC
+from constants import SERVER_CAPACITY, SERVER_COMPUTATION, MODEL_TYPE, EPOCHS, TOTAL_BANDWIDTH, BG_NOISE_POWER, TRANS_RATE_LIMIT, TIME_SYNC
 
 def game_play(selected_cids: list, param_dicts: list[dict]):
 
@@ -38,7 +38,7 @@ def game_play(selected_cids: list, param_dicts: list[dict]):
                 if offload_flag[_] == 1 and _ != cid:
                     trans_intfr += param_dicts[_]["transPower"] * param_dicts[_]["channelGain"]
             
-            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
+            trans_rate = TOTAL_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
 
             if trans_rate > TRANS_RATE_LIMIT:
                 trans_rate = TRANS_RATE_LIMIT
@@ -95,7 +95,7 @@ def time_cost_calc(selected_cids: list, param_dicts: list[dict], offload_flag: d
                 if offload_flag[_] == 1 and _ != cid:
                     trans_intfr += param_dicts[_]["transPower"] * param_dicts[_]["channelGain"]
             
-            trans_rate = MAX_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
+            trans_rate = TOTAL_BANDWIDTH * math.log2(1 + param_dicts[cid]["transPower"] * param_dicts[cid]["channelGain"] / (BG_NOISE_POWER + trans_intfr))
 
             if trans_rate > TRANS_RATE_LIMIT:
                 trans_rate = TRANS_RATE_LIMIT

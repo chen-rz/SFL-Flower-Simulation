@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import flwr.common
 import numpy as np
 import pandas
+import torch
 import torchvision
 from flwr.common import (
     EvaluateIns, EvaluateRes, FitIns, FitRes, GetParametersIns,
@@ -21,7 +22,7 @@ from flwr.server.strategy.aggregate import aggregate, weighted_loss_avg
 from flwr.server.strategy.strategy import Strategy
 
 import client as clt
-from constants import POOL_SIZE, NUM_ON_STRIKE, NUM_TO_CHOOSE, ALPHA, V_THRESHOLD, BETA
+from constants import POOL_SIZE, NUM_ROUNDS, NUM_ON_STRIKE, NUM_TO_CHOOSE, ALPHA, V_THRESHOLD, BETA, SERVER_CAPACITY
 from dataset_utils import cifar10Transformation
 from game_theory import game_play, time_cost_calc
 
@@ -273,7 +274,14 @@ class Random_ClientManager(SimpleClientManager):
 
         ###### Resource Allocation based on Game Theory #####################################################
 
-        offload_flag_dict = game_play(selected_cids, param_dicts)
+        # TODO Play game or not!
+        # offload_flag_dict = game_play(selected_cids, param_dicts)
+
+        offload_flag_dict = {cid: 0 for cid in selected_cids}
+        offload_candidates = random.sample(selected_cids, SERVER_CAPACITY)
+        for cid in offload_candidates:
+            offload_flag_dict[cid] = 1
+
         max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
 
         log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
@@ -341,6 +349,16 @@ class FedCS_ClientManager(SimpleClientManager):
 
             cids_sorted_by_r1 = sorted(cids_of_r1, key=lambda i: time_cost_of_r1[i], reverse=False)
             selected_cids = cids_sorted_by_r1[ : NUM_TO_CHOOSE]
+
+        # TODO The different FedCS strategies!
+
+        # # Volatility
+        # active_cids = list(range(POOL_SIZE)) # Firstly, get a list of all client IDs
+        # for _ in range(NUM_ON_STRIKE):
+        #     pop_idx = random.randint(0, len(active_cids) - 1) # The index of the client IDs to be removed
+        #     active_cids.pop(pop_idx)
+
+        # selected_cids = sorted(active_cids, key=lambda i: param_dicts[i]["computation"], reverse=True)[:NUM_TO_CHOOSE]
         
         for i in selected_cids:
             param_dicts[i]["isSelected"] = True
@@ -356,7 +374,13 @@ class FedCS_ClientManager(SimpleClientManager):
                 offload_flag_dict[i] = 0
 
         else:
-            offload_flag_dict = game_play(selected_cids, param_dicts)
+            # TODO Play game or not!
+            # offload_flag_dict = game_play(selected_cids, param_dicts)
+            
+            offload_flag_dict = {cid: 0 for cid in selected_cids}
+            offload_candidates = random.sample(selected_cids, SERVER_CAPACITY)
+            for cid in offload_candidates:
+                offload_flag_dict[cid] = 1
 
         max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
 
@@ -368,7 +392,7 @@ class FedCS_ClientManager(SimpleClientManager):
             {
                 "clients_selected": selected_cids,
                 "time_elapsed": max_time_cost,
-                "time_cost_all": time_cost_dict, # TODO: Detailed time cost for each client
+                "time_cost_all": time_cost_dict, # Detailed time cost for each client
                 "time_constraint": time_constr
             }, \
             param_dicts
@@ -467,7 +491,7 @@ class Oort_ClientManager(SimpleClientManager):
             log(DEBUG, "Last involving round: " + str(last_involving_round))
 
         # Calculating utility
-        oort_epsilon = 0.75
+        oort_epsilon = 0.1
         oort_alpha = 2
 
         num_unexplored_to_choose = int(NUM_TO_CHOOSE * oort_epsilon)
@@ -541,7 +565,14 @@ class Oort_ClientManager(SimpleClientManager):
 
         ###### STAGE 3 - Resource Allocation based on Game Theory ##########################################
 
-        offload_flag_dict = game_play(selected_cids, param_dicts)
+        # TODO Play game or not!
+        # offload_flag_dict = game_play(selected_cids, param_dicts)
+        
+        offload_flag_dict = {cid: 0 for cid in selected_cids}
+        offload_candidates = random.sample(selected_cids, SERVER_CAPACITY)
+        for cid in offload_candidates:
+            offload_flag_dict[cid] = 1
+
         max_time_cost, time_cost_dict = time_cost_calc(selected_cids, param_dicts, offload_flag_dict)
 
         log(DEBUG, "Round " + str(server_round) + " offloading plan: " + str(offload_flag_dict))
@@ -731,6 +762,10 @@ class SplitFederatedLearning(Strategy):
             metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
         elif server_round == 1:  # Only log this warning once
             log(WARNING, "No fit_metrics_aggregation_fn provided")
+
+        # Save the aggregated model parameters
+        if server_round == NUM_ROUNDS:
+            torch.save(parameters_aggregated, "./output/aggregated_model.pth")
 
         return parameters_aggregated, metrics_aggregated
 

@@ -1,8 +1,9 @@
 import random
 import argparse
 
-from constants import POOL_SIZE
+from constants import POOL_SIZE, MODEL_TYPE
 from dataset_utils import get_cifar_10, do_fl_partitioning
+from model_statistics import model_statistics
 
 parser = argparse.ArgumentParser(description="Partition Dataset")
 parser.add_argument(
@@ -50,3 +51,11 @@ print("Transmission power initialization completed")
 with open("./parameters/channelGain.txt", mode='w') as outputFile:
     for n in range(POOL_SIZE):
         outputFile.write(str(random.uniform(0.02, 0.05)) + "\n")
+print("Channel gain initialization completed")
+
+# Define model split layers
+with open("./parameters/splitLayer.txt", mode='w') as outputFile:
+    for n in range(POOL_SIZE):
+        model_layer_num = model_statistics(MODEL_TYPE)[0]
+        outputFile.write(str(random.randint(2, int(0.67 * model_layer_num) + 1)) + "\n")
+print("Model split layers initialization completed")

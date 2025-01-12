@@ -23,7 +23,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--alpha",
-                "66"
+                "1"
             ],
             "justMyCode": false
         },

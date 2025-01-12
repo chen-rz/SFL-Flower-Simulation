@@ -62,6 +62,9 @@ if __name__ == "__main__":
     with open("./parameters/channelGain.txt") as inputFile:
         for _ in range(POOL_SIZE):
             parameter_dict_list[_]["channelGain"] = eval(inputFile.readline())
+    with open("./parameters/splitLayer.txt") as inputFile:
+        for _ in range(POOL_SIZE):
+            parameter_dict_list[_]["splitLayer"] = eval(inputFile.readline())
 
 
     def client_fn(cid: str):

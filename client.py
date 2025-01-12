@@ -27,8 +27,8 @@ class FlowerClient(fl.client.NumPyClient):
         # TODO Instantiate more models here
         if MODEL_TYPE == "alexnet":
             self.net = torchvision.models.alexnet(num_classes=10)
-            model_layer_num = model_statistics(MODEL_TYPE)[0]
-            self.properties["splitLayer"] = random.randint(2, int(0.67 * model_layer_num) + 1)
+        elif MODEL_TYPE == "vgg11":
+            self.net = torchvision.models.vgg11(num_classes=10)
         else:
             raise ValueError("Model type not supported")
 
@@ -40,6 +40,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.properties["computation"] = param_dict["computation"] * random.uniform(0.75, 1.25)
         self.properties["transPower"] = param_dict["transPower"] * random.uniform(0.75, 1.25)
         self.properties["channelGain"] = param_dict["channelGain"] * random.uniform(0.75, 1.25)
+        self.properties["splitLayer"] = param_dict["splitLayer"]
 
     def get_properties(self, config) -> Dict[str, Scalar]:
         return self.properties
@@ -154,6 +155,8 @@ def get_evaluate_fn(test_set: torchvision.datasets.CIFAR10, ):
         # TODO Instantiate more models here
         if MODEL_TYPE == "alexnet":
             model = torchvision.models.alexnet(num_classes=10)
+        elif MODEL_TYPE == "vgg11":
+            model = torchvision.models.vgg11(num_classes=10)
         else:
             raise ValueError("Model type not supported")
 

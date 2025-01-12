@@ -1,8 +1,8 @@
 # Number of dataset partions (= number of total clients)
-POOL_SIZE = 100
+POOL_SIZE = 50
 
 # Number of participants in each round
-NUM_TO_CHOOSE = 20
+NUM_TO_CHOOSE = 15
 
 # Volatility
 NUM_ON_STRIKE = 0
@@ -14,7 +14,7 @@ NUM_ROUNDS = 500
 BG_NOISE_POWER = 1e-13
 
 # Total bandwidth
-MAX_BANDWIDTH = 55e6
+TOTAL_BANDWIDTH = 55e6
 
 # Server capacity
 SERVER_CAPACITY = 6
@@ -38,7 +38,7 @@ BETA = 0.5
 V_THRESHOLD = 0.5
 
 # Model type
-MODEL_TYPE = "alexnet"
+MODEL_TYPE = "vgg11"
 
 # Epochs
 EPOCHS = 5
@@ -47,4 +47,4 @@ EPOCHS = 5
 BATCH_SIZE = 32
 
 # Learning rate
-LEARNING_RATE = 0.002
+LEARNING_RATE = 0.00025
