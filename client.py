@@ -29,6 +29,8 @@ class FlowerClient(fl.client.NumPyClient):
             self.net = torchvision.models.alexnet(num_classes=10)
         elif MODEL_TYPE == "vgg11":
             self.net = torchvision.models.vgg11(num_classes=10)
+        elif MODEL_TYPE == "vit_b_16":
+            self.net = torchvision.models.vit_b_16(num_classes=10)
         else:
             raise ValueError("Model type not supported")
 
@@ -157,6 +159,8 @@ def get_evaluate_fn(test_set: torchvision.datasets.CIFAR10, ):
             model = torchvision.models.alexnet(num_classes=10)
         elif MODEL_TYPE == "vgg11":
             model = torchvision.models.vgg11(num_classes=10)
+        elif MODEL_TYPE == "vit_b_16":
+            model = torchvision.models.vit_b_16(num_classes=10)
         else:
             raise ValueError("Model type not supported")
 

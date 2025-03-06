@@ -38,7 +38,7 @@ BETA = 0.5
 V_THRESHOLD = 0.5
 
 # Model type
-MODEL_TYPE = "vgg11"
+MODEL_TYPE = "vit_b_16"
 
 # Epochs
 EPOCHS = 5
@@ -47,4 +47,4 @@ EPOCHS = 5
 BATCH_SIZE = 32
 
 # Learning rate
-LEARNING_RATE = 0.00025
+LEARNING_RATE = 0.001

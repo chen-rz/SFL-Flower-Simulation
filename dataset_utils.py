@@ -55,7 +55,7 @@ def get_random_id_splits(total: int, val_ratio: float, shuffle: bool = True):
 def do_fl_partitioning(path_to_dataset, pool_size, alpha, num_classes, val_ratio=0.0):
     """Torchvision (e.g. CIFAR-10) datasets using LDA."""
 
-    images, labels = torch.load(path_to_dataset)
+    images, labels = torch.load(path_to_dataset, weights_only=False)
     idx = np.array(range(len(images)))
     dataset = [idx, labels]
     partitions, _ = create_lda_partitions(
@@ -139,7 +139,7 @@ class TorchVision_FL(VisionDataset):
 
         if path_to_data:
             # load data and targets (path_to_data points to a specific .pt file)
-            self.data, self.targets = torch.load(path_to_data)
+            self.data, self.targets = torch.load(path_to_data, weights_only=False)
         else:
             self.data = data
             self.targets = targets
