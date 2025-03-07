@@ -1,6 +1,6 @@
 import math
 import torch
-from constants import LEARNING_RATE
+from constants import LEARNING_RATE, MOMENTUM
 
 
 def train(net, trainloader, epochs, device):
@@ -8,7 +8,7 @@ def train(net, trainloader, epochs, device):
     criterion = torch.nn.CrossEntropyLoss()
     train_loss = 0.0
     mean_square_batch_loss = 0.0
-    optimizer = torch.optim.SGD(net.parameters(), lr=LEARNING_RATE)#, momentum=0.9)
+    optimizer = torch.optim.SGD(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
     net.train()
 
     for _ in range(epochs):

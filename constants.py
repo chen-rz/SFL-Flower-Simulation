@@ -47,4 +47,7 @@ EPOCHS = 5
 BATCH_SIZE = 32
 
 # Learning rate
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0002
+
+# Momentum
+MOMENTUM = 0.9
